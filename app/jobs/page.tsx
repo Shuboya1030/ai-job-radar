@@ -135,11 +135,13 @@ function JobCard({ job }: { job: any }) {
     : null
 
   const fundingDisplay = (() => {
-    if (!job.funding_stage || job.funding_stage === 'Unknown') return null
-    if (job.funding_amount_cents && job.funding_amount_status === 'known') {
-      return `${job.funding_stage} · $${formatFunding(job.funding_amount_cents)}`
-    }
-    return job.funding_stage
+    const hasAmount = job.funding_amount_cents && job.funding_amount_status === 'known'
+    const hasStage = job.funding_stage && job.funding_stage !== 'Unknown'
+
+    if (hasAmount && hasStage) return `${job.funding_stage} · $${formatFunding(job.funding_amount_cents)} raised`
+    if (hasAmount) return `$${formatFunding(job.funding_amount_cents)} raised`
+    if (hasStage) return job.funding_stage
+    return 'Funding Unknown'
   })()
 
   return (
@@ -163,12 +165,12 @@ function JobCard({ job }: { job: any }) {
       </h3>
 
       {/* Funding */}
-      {fundingDisplay && (
-        <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium mb-2">
-          <TrendingUp className="w-3 h-3" />
-          {fundingDisplay}
-        </div>
-      )}
+      <div className={`flex items-center gap-1.5 text-xs font-medium mb-2 ${
+        fundingDisplay === 'Funding Unknown' ? 'text-ink-muted' : 'text-violet-600'
+      }`}>
+        <TrendingUp className="w-3 h-3" />
+        {fundingDisplay}
+      </div>
 
       {/* Salary */}
       {salary && (

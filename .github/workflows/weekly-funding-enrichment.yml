@@ -1,0 +1,54 @@
+name: Weekly Funding Enrichment (Growjo)
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'  # Monday UTC 12:00
+  workflow_dispatch:
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scrapers
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright + browsers
+        run: |
+          playwright install chromium
+          playwright install-deps chromium
+
+      - name: Install virtual display
+        run: sudo apt-get install -y xvfb
+
+      - name: Run Growjo funding enrichment
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd scrapers
+          xvfb-run python -u growjo_enricher.py 2>&1 | tee /tmp/funding.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: funding-logs-${{ github.run_number }}
+          path: /tmp/funding.log
+          retention-days: 7
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::error::Growjo enrichment failed!"

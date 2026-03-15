@@ -5,13 +5,19 @@ from urllib.parse import urlparse
 
 
 def extract_domain(url):
-    """Extract canonical domain from URL. 'https://www.anthropic.com/careers' → 'anthropic.com'"""
+    """Extract canonical domain from URL. 'https://www.anthropic.com/careers' → 'anthropic.com'
+    Returns None for LinkedIn company URLs (they're not real company domains)."""
     if not url:
         return None
     try:
         parsed = urlparse(url if "://" in url else f"https://{url}")
         domain = parsed.netloc or parsed.path.split("/")[0]
         domain = domain.lower().strip()
+
+        # LinkedIn company URLs are NOT real company domains — skip them
+        if "linkedin.com" in domain:
+            return None
+
         # Strip www prefix
         if domain.startswith("www."):
             domain = domain[4:]
@@ -48,8 +54,9 @@ def resolve_company(supabase, company_name, company_url, source, enrichment_data
         return None
 
     domain = extract_domain(company_url)
+    name_normalized = company_name.strip()
 
-    # 1. Try domain match
+    # 1. Try domain match (only for real company domains, not LinkedIn)
     if domain:
         result = supabase.table("companies").select("id, funding_amount_cents, funding_amount_status").eq(
             "canonical_domain", domain
@@ -58,18 +65,28 @@ def resolve_company(supabase, company_name, company_url, source, enrichment_data
         if result.data:
             company_id = result.data[0]["id"]
             _maybe_update_company(supabase, company_id, result.data[0], enrichment_data)
-            _ensure_alias(supabase, company_id, company_name, source)
+            _ensure_alias(supabase, company_id, name_normalized, source)
             return company_id
 
-    # 2. Try alias match
+    # 2. Try exact name match in companies table
+    name_result = supabase.table("companies").select("id, funding_amount_cents, funding_amount_status").eq(
+        "name", name_normalized
+    ).limit(1).execute()
+
+    if name_result.data:
+        company_id = name_result.data[0]["id"]
+        _maybe_update_company(supabase, company_id, name_result.data[0], enrichment_data)
+        return company_id
+
+    # 3. Try alias match
     alias_result = supabase.table("company_aliases").select("company_id").eq(
-        "alias", company_name
+        "alias", name_normalized
     ).limit(1).execute()
 
     if alias_result.data:
         return alias_result.data[0]["company_id"]
 
-    # 3. Create new company
+    # 4. Create new company
     company_type = enrichment_data.get("company_type", "Enterprise") if enrichment_data else "Enterprise"
     industry = enrichment_data.get("industry", "Other") if enrichment_data else "Other"
 

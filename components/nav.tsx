@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Radar, BarChart3, Briefcase } from 'lucide-react'
+import { Radar, BarChart3, Briefcase, Building2 } from 'lucide-react'
 import clsx from 'clsx'
 
 const links = [
   { href: '/', label: 'Overview', icon: Radar },
   { href: '/market/ai-engineer', label: 'Market Analysis', icon: BarChart3 },
   { href: '/jobs', label: 'Job Board', icon: Briefcase },
+  { href: '/companies', label: 'Companies', icon: Building2 },
 ]
 
 export default function Nav() {

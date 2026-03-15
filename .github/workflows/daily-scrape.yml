@@ -1,0 +1,56 @@
+name: Daily Job Scrape
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily UTC 6:00 (PST 10pm)
+  workflow_dispatch:
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('scrapers/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          cd scrapers
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run LinkedIn scraper + enrichment
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd scrapers
+          python -u main.py 2>&1 | tee /tmp/scrape.log
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scrape-logs-${{ github.run_number }}
+          path: /tmp/scrape.log
+          retention-days: 7
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Daily scrape failed! Check logs at https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"

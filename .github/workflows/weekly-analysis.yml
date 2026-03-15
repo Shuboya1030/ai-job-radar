@@ -1,0 +1,38 @@
+name: Weekly Market Analysis
+
+on:
+  schedule:
+    - cron: '0 8 * * 0'  # Sunday UTC 8:00
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scrapers
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run weekly analysis
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          cd scrapers
+          python -u weekly_analysis.py
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::error::Weekly analysis failed!"

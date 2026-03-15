@@ -4,22 +4,23 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ChevronRight, MapPin, DollarSign, Building2, Users, Calendar,
-  ExternalLink, Briefcase, Globe,
+  ChevronRight, MapPin, DollarSign, Users, Calendar,
+  ExternalLink, Briefcase, Globe, TrendingUp,
 } from 'lucide-react'
-import type { JobFull } from '@/types/database'
 
 export default function JobDetail() {
   const params = useParams()
-  const [job, setJob] = useState<JobFull | null>(null)
+  const id = params?.id as string
+  const [job, setJob] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/jobs/${params.id}`)
+    if (!id) return
+    fetch(`/api/jobs/${id}`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { setJob(d); setLoading(false) })
       .catch(() => setLoading(false))
-  }, [params.id])
+  }, [id])
 
   if (loading) return <div className="max-w-5xl mx-auto px-6 py-20 text-center text-ink-muted">Loading...</div>
   if (!job) return <div className="max-w-5xl mx-auto px-6 py-20 text-center text-ink-muted">Job not found.</div>
@@ -28,10 +29,14 @@ export default function JobDetail() {
     ? `$${Math.round((job.salary_annual_min || 0) / 1000)}K — $${Math.round((job.salary_annual_max || 0) / 1000)}K`
     : null
 
-  const skills = [
-    ...(job.hard_skills || []).map(s => typeof s === 'string' ? s : ''),
-    ...(job.tools || []).map(s => typeof s === 'string' ? s : ''),
-  ].filter(Boolean)
+  const parseArr = (v: any): string[] => {
+    if (Array.isArray(v)) return v
+    if (typeof v === 'string') { try { return JSON.parse(v) } catch { return [] } }
+    return []
+  }
+
+  const skills = [...parseArr(job.hard_skills), ...parseArr(job.tools)].filter(Boolean)
+  const softSkills = parseArr(job.soft_skills)
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -47,12 +52,7 @@ export default function JobDetail() {
         <div className="lg:col-span-2 space-y-6">
           {/* Header */}
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-ink">{job.title}</h1>
-              {job.company_type === 'Startup' && (
-                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium">Startup</span>
-              )}
-            </div>
+            <h1 className="text-2xl font-bold text-ink mb-1">{job.title}</h1>
             <p className="text-ink-secondary text-lg">{job.company_name || 'Unknown Company'}</p>
 
             <div className="flex flex-wrap gap-3 mt-4 text-sm text-ink-muted">
@@ -81,8 +81,19 @@ export default function JobDetail() {
             <div>
               <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Required Skills & Tools</h2>
               <div className="flex flex-wrap gap-2">
-                {skills.map(s => (
+                {skills.map((s: string) => (
                   <span key={s} className="px-3 py-1 bg-brand-50 text-brand-700 rounded-full text-sm font-medium">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {softSkills.length > 0 && (
+            <div>
+              <h2 className="text-sm font-semibold text-ink-muted uppercase tracking-wide mb-3">Soft Skills</h2>
+              <div className="flex flex-wrap gap-2">
+                {softSkills.map((s: string) => (
+                  <span key={s} className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm font-medium">{s}</span>
                 ))}
               </div>
             </div>
@@ -111,9 +122,9 @@ export default function JobDetail() {
                 <InfoRow icon={Globe} label="Industry" value={job.company_industry} />
               )}
               {job.funding_stage && job.funding_stage !== 'Unknown' && (
-                <InfoRow icon={DollarSign} label="Funding" value={
+                <InfoRow icon={TrendingUp} label="Funding" value={
                   job.funding_amount_cents && job.funding_amount_status === 'known'
-                    ? `${job.funding_stage} · $${Math.round(job.funding_amount_cents / 100_000_000)}M`
+                    ? `${job.funding_stage} · $${formatFunding(job.funding_amount_cents)}`
                     : job.funding_stage
                 } />
               )}
@@ -122,9 +133,6 @@ export default function JobDetail() {
               )}
               {job.headquarter && (
                 <InfoRow icon={MapPin} label="HQ" value={job.headquarter} />
-              )}
-              {job.company_type && (
-                <InfoRow icon={Building2} label="Type" value={job.company_type} />
               )}
             </div>
           </div>
@@ -144,4 +152,12 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
       </div>
     </div>
   )
+}
+
+function formatFunding(cents: number): string {
+  const dollars = cents / 100
+  if (dollars >= 1_000_000_000) return `${(dollars / 1_000_000_000).toFixed(1)}B`
+  if (dollars >= 1_000_000) return `${Math.round(dollars / 1_000_000)}M`
+  if (dollars >= 1_000) return `${Math.round(dollars / 1_000)}K`
+  return `${dollars}`
 }

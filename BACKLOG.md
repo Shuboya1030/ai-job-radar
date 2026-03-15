@@ -29,6 +29,12 @@
 | B-14 | Email alerts for new matching jobs | P2 | Weekly digest or real-time |
 | B-15 | Individual company career page scraping (Path A) | P3 | Per-company scraper for Greenhouse, Lever, Ashby, etc. High maintenance |
 
+### Company Discovery Pipeline
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| B-18 | Company Discovery Pipeline — top-down approach | P1 | Maintain active AI company list by reading TechCrunch/Crunchbase news weekly. Discover new funded startups → add to company list → proactively search their career pages for jobs. Complements existing bottom-up scraping (LinkedIn/Wellfound/YC). |
+| B-19 | News source scraping (TechCrunch, The Information, etc.) | P1 | Extract newly funded AI companies from tech news. Use GPT to judge "is this AI-related?" |
+
 ### Data Sources
 | ID | Item | Priority | Notes |
 |----|------|----------|-------|

@@ -1,31 +1,28 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Search, Filter, Briefcase, MapPin, DollarSign, Building2, ExternalLink } from 'lucide-react'
+import { Search, MapPin, DollarSign, TrendingUp, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
-import type { JobFull, Industry, WorkType, RoleCategory } from '@/types/database'
 
 const ROLE_OPTIONS = ['AI PM', 'AI Engineer', 'Software Engineer']
 const WORK_TYPE_OPTIONS = ['Remote', 'Hybrid', 'On-site']
 const INDUSTRY_OPTIONS = [
   'AI/ML', 'Fintech', 'Healthcare', 'E-commerce', 'SaaS', 'Cybersecurity',
   'Robotics', 'EdTech', 'Adtech', 'Cloud/Infra', 'Gaming', 'Automotive',
-  'Biotech', 'Enterprise Software', 'Social/Media', 'Other',
+  'Biotech', 'Enterprise Software', 'Social/Media',
 ]
 
 export default function JobBoard() {
-  const [jobs, setJobs] = useState<JobFull[]>([])
+  const [jobs, setJobs] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
-  const limit = 20
+  const limit = 30
 
-  // Filters
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
   const [workType, setWorkType] = useState('')
   const [industry, setIndustry] = useState('')
-  const [startupOnly, setStartupOnly] = useState(false)
   const [sort, setSort] = useState('posted_at')
 
   const fetchJobs = useCallback(async (reset = false) => {
@@ -35,7 +32,6 @@ export default function JobBoard() {
     if (role) params.set('role', role)
     if (workType) params.set('work_type', workType)
     if (industry) params.set('industry', industry)
-    if (startupOnly) params.set('startup_only', 'true')
     if (search) params.set('search', search)
     params.set('sort', sort)
     params.set('limit', String(limit))
@@ -52,18 +48,33 @@ export default function JobBoard() {
     }
     setTotal(data.total || 0)
     setLoading(false)
-  }, [role, workType, industry, startupOnly, search, sort, offset])
+  }, [role, workType, industry, search, sort, offset])
 
-  useEffect(() => { fetchJobs(true) }, [role, workType, industry, startupOnly, sort])
+  useEffect(() => { fetchJobs(true) }, [role, workType, industry, sort])
 
   const handleSearch = () => fetchJobs(true)
-  const loadMore = () => { setOffset(prev => prev + limit); fetchJobs(false) }
+  const loadMore = () => {
+    const newOffset = offset + limit
+    setOffset(newOffset)
+    // fetch with new offset
+    const params = new URLSearchParams()
+    if (role) params.set('role', role)
+    if (workType) params.set('work_type', workType)
+    if (industry) params.set('industry', industry)
+    if (search) params.set('search', search)
+    params.set('sort', sort)
+    params.set('limit', String(limit))
+    params.set('offset', String(newOffset))
+    fetch(`/api/jobs?${params}`)
+      .then(r => r.json())
+      .then(data => setJobs(prev => [...prev, ...(data.jobs || [])]))
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-3xl font-bold text-ink mb-2">AI Job Board</h1>
+      <h1 className="text-3xl font-bold text-ink mb-1">AI Job Board</h1>
       <p className="text-ink-secondary mb-6">
-        {total} active positions from LinkedIn, Wellfound, and YC · Updated daily
+        {total} active positions · Updated daily
       </p>
 
       {/* Filters */}
@@ -83,15 +94,6 @@ export default function JobBoard() {
           <Select value={role} onChange={setRole} options={ROLE_OPTIONS} placeholder="All Roles" />
           <Select value={workType} onChange={setWorkType} options={WORK_TYPE_OPTIONS} placeholder="Work Type" />
           <Select value={industry} onChange={setIndustry} options={INDUSTRY_OPTIONS} placeholder="Industry" />
-          <label className="flex items-center gap-2 text-sm text-ink-secondary cursor-pointer">
-            <input
-              type="checkbox"
-              checked={startupOnly}
-              onChange={e => setStartupOnly(e.target.checked)}
-              className="rounded border-slate-300"
-            />
-            Startups
-          </label>
           <Select
             value={sort}
             onChange={setSort}
@@ -102,8 +104,8 @@ export default function JobBoard() {
         </div>
       </div>
 
-      {/* Job Cards */}
-      <div className="space-y-4">
+      {/* Job Cards — 3 column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {jobs.map(job => (
           <JobCard key={job.id} job={job} />
         ))}
@@ -127,52 +129,72 @@ export default function JobBoard() {
   )
 }
 
-function JobCard({ job }: { job: JobFull }) {
+function JobCard({ job }: { job: any }) {
   const salary = job.salary_annual_min || job.salary_annual_max
     ? `$${Math.round((job.salary_annual_min || 0) / 1000)}K — $${Math.round((job.salary_annual_max || 0) / 1000)}K`
     : null
 
+  const fundingDisplay = (() => {
+    if (!job.funding_stage || job.funding_stage === 'Unknown') return null
+    if (job.funding_amount_cents && job.funding_amount_status === 'known') {
+      return `${job.funding_stage} · $${formatFunding(job.funding_amount_cents)}`
+    }
+    return job.funding_stage
+  })()
+
   return (
     <Link
       href={`/jobs/${job.id}`}
-      className="block bg-white rounded-2xl p-5 border border-slate-100 hover:shadow-md hover:border-brand-200 transition-all"
+      className="flex flex-col bg-white rounded-2xl p-5 border border-slate-100 hover:shadow-lg hover:border-brand-200 transition-all group"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-semibold text-ink truncate">{job.title}</h3>
-            {job.company_type === 'Startup' && (
-              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-xs font-medium whitespace-nowrap">Startup</span>
-            )}
-          </div>
-          <p className="text-sm text-ink-secondary mb-3">
-            {job.company_name || 'Unknown Company'}
-            {job.funding_stage && job.funding_stage !== 'Unknown' && (
-              <span className="text-ink-muted"> · {job.funding_stage}</span>
-            )}
-            {job.funding_amount_cents && job.funding_amount_status === 'known' && (
-              <span className="text-ink-muted"> · ${Math.round(job.funding_amount_cents / 100_000_000)}M raised</span>
-            )}
-          </p>
-          <div className="flex flex-wrap gap-2 text-xs text-ink-muted">
-            {job.location && (
-              <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{job.location}</span>
-            )}
-            {salary && (
-              <span className="flex items-center gap-1 text-emerald-600 font-medium"><DollarSign className="w-3 h-3" />{salary}</span>
-            )}
-            {job.work_type && job.work_type !== 'Unknown' && (
-              <span className="px-2 py-0.5 bg-slate-100 rounded-full">{job.work_type}</span>
-            )}
-            {job.industry && job.industry !== 'Other' && (
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full">{job.industry}</span>
-            )}
-            {job.role_category && (
-              <span className="px-2 py-0.5 bg-violet-50 text-violet-600 rounded-full">{job.role_category}</span>
-            )}
-          </div>
+      {/* Company + Industry */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-semibold text-ink truncate">{job.company_name || 'Unknown'}</span>
+        {job.industry && job.industry !== 'Other' && (
+          <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full text-xs font-medium whitespace-nowrap ml-2">
+            {job.industry}
+          </span>
+        )}
+      </div>
+
+      {/* Job Title */}
+      <h3 className="font-bold text-ink text-base mb-2 leading-snug group-hover:text-brand-600 transition-colors line-clamp-2">
+        {job.title}
+      </h3>
+
+      {/* Funding */}
+      {fundingDisplay && (
+        <div className="flex items-center gap-1.5 text-xs text-violet-600 font-medium mb-2">
+          <TrendingUp className="w-3 h-3" />
+          {fundingDisplay}
         </div>
-        <ExternalLink className="w-4 h-4 text-ink-muted flex-shrink-0 mt-1" />
+      )}
+
+      {/* Salary */}
+      {salary && (
+        <div className="flex items-center gap-1.5 text-sm text-emerald-600 font-semibold mb-3">
+          <DollarSign className="w-3.5 h-3.5" />
+          {salary}
+        </div>
+      )}
+
+      {/* Meta tags */}
+      <div className="flex flex-wrap gap-1.5 mt-auto pt-2">
+        {job.role_category && (
+          <span className="px-2 py-0.5 bg-violet-50 text-violet-600 rounded text-xs font-medium">
+            {job.role_category}
+          </span>
+        )}
+        {job.work_type && job.work_type !== 'Unknown' && (
+          <span className="px-2 py-0.5 bg-slate-100 text-ink-secondary rounded text-xs">
+            {job.work_type}
+          </span>
+        )}
+        {job.location && (
+          <span className="flex items-center gap-1 text-xs text-ink-muted truncate max-w-[140px]">
+            <MapPin className="w-3 h-3 flex-shrink-0" />{job.location}
+          </span>
+        )}
       </div>
     </Link>
   )
@@ -194,4 +216,12 @@ function Select({ value, onChange, options, labels, placeholder }: {
       ))}
     </select>
   )
+}
+
+function formatFunding(cents: number): string {
+  const dollars = cents / 100
+  if (dollars >= 1_000_000_000) return `${(dollars / 1_000_000_000).toFixed(1)}B`
+  if (dollars >= 1_000_000) return `${Math.round(dollars / 1_000_000)}M`
+  if (dollars >= 1_000) return `${Math.round(dollars / 1_000)}K`
+  return `${dollars}`
 }

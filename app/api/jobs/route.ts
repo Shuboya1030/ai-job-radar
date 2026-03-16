@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   const salary_min = params.get('salary_min')
   const salary_max = params.get('salary_max')
   const startup_only = params.get('startup_only')
+  const funding_stage = params.get('funding_stage')
   const search = params.get('search')
   const limit = parseInt(params.get('limit') || '20')
   const offset = parseInt(params.get('offset') || '0')
@@ -26,6 +27,7 @@ export async function GET(request: NextRequest) {
   if (salary_min) query = query.gte('salary_annual_min', parseInt(salary_min))
   if (salary_max) query = query.lte('salary_annual_max', parseInt(salary_max))
   if (startup_only === 'true') query = query.eq('company_type', 'Startup')
+  if (funding_stage) query = query.eq('funding_stage', funding_stage)
   if (search) {
     query = query.or(`title.ilike.%${search}%,company_name.ilike.%${search}%`)
   }

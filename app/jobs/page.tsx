@@ -10,6 +10,9 @@ const INDUSTRY_OPTIONS = [
   'Robotics', 'EdTech', 'Adtech', 'Cloud/Infra', 'Gaming', 'Automotive',
   'Biotech', 'Enterprise Software', 'Social/Media',
 ]
+const FUNDING_OPTIONS = [
+  'Pre-seed', 'Seed', 'Series A', 'Series B', 'Series C', 'Series D+', 'Public',
+]
 
 export default function JobBoard() {
   const [jobs, setJobs] = useState<any[]>([])
@@ -22,6 +25,7 @@ export default function JobBoard() {
   const [role, setRole] = useState('')
   const [workType, setWorkType] = useState('')
   const [industry, setIndustry] = useState('')
+  const [fundingStage, setFundingStage] = useState('')
   const [sort, setSort] = useState('posted_at')
 
   const fetchJobs = useCallback(async (reset = false) => {
@@ -30,6 +34,7 @@ export default function JobBoard() {
     if (role) params.set('role', role)
     if (workType) params.set('work_type', workType)
     if (industry) params.set('industry', industry)
+    if (fundingStage) params.set('funding_stage', fundingStage)
     if (search) params.set('search', search)
     params.set('sort', sort)
     params.set('limit', String(limit))
@@ -46,9 +51,9 @@ export default function JobBoard() {
     }
     setTotal(data.total || 0)
     setLoading(false)
-  }, [role, workType, industry, search, sort, offset])
+  }, [role, workType, industry, fundingStage, search, sort, offset])
 
-  useEffect(() => { fetchJobs(true) }, [role, workType, industry, sort])
+  useEffect(() => { fetchJobs(true) }, [role, workType, industry, fundingStage, sort])
 
   const handleSearch = () => fetchJobs(true)
   const loadMore = () => {
@@ -58,6 +63,7 @@ export default function JobBoard() {
     if (role) params.set('role', role)
     if (workType) params.set('work_type', workType)
     if (industry) params.set('industry', industry)
+    if (fundingStage) params.set('funding_stage', fundingStage)
     if (search) params.set('search', search)
     params.set('sort', sort)
     params.set('limit', String(limit))
@@ -94,6 +100,7 @@ export default function JobBoard() {
         <FilterSelect value={role} onChange={setRole} options={ROLE_OPTIONS} placeholder="Role" />
         <FilterSelect value={workType} onChange={setWorkType} options={WORK_TYPE_OPTIONS} placeholder="Work type" />
         <FilterSelect value={industry} onChange={setIndustry} options={INDUSTRY_OPTIONS} placeholder="Industry" />
+        <FilterSelect value={fundingStage} onChange={setFundingStage} options={FUNDING_OPTIONS} placeholder="Funding Stage" />
         <FilterSelect
           value={sort}
           onChange={setSort}

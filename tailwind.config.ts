@@ -8,36 +8,24 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: '#eff6ff',
-          100: '#dbeafe',
-          200: '#bfdbfe',
-          300: '#93c5fd',
-          400: '#60a5fa',
-          500: '#3b82f6',
-          600: '#2563eb',
-          700: '#1d4ed8',
-          800: '#1e40af',
-          900: '#1e3a8a',
-        },
-        accent: {
-          DEFAULT: '#f97316',
-          light: '#fb923c',
-          dark: '#ea580c',
-        },
+        ground: '#FAFAF8',
+        primary: '#18181B',
+        secondary: '#3F3F46',
+        tertiary: '#71717A',
+        faint: '#A1A1AA',
+        lime: '#BFFF00',
+        'lime-dark': '#8FB300',
         surface: {
-          DEFAULT: '#ffffff',
-          secondary: '#f8fafc',
-          tertiary: '#f1f5f9',
-        },
-        ink: {
-          DEFAULT: '#0f172a',
-          secondary: '#475569',
-          muted: '#94a3b8',
+          DEFAULT: '#FFFFFF',
+          raised: '#F4F4F5',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['DM Sans', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      fontSize: {
+        '2xs': ['0.65rem', { lineHeight: '1rem' }],
       },
     },
   },

@@ -2,10 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
 @layer base {
   body {
-    @apply bg-surface-secondary text-ink font-sans antialiased;
+    @apply bg-ground text-primary font-sans antialiased;
   }
+
+  ::selection {
+    @apply bg-lime text-black;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-zinc-200 rounded-lg;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 hover:border-zinc-400 hover:shadow-[0_2px_20px_rgba(0,0,0,0.06)];
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono font-medium rounded;
+  }
+
+  .data-value {
+    @apply font-mono tabular-nums tracking-tight;
+  }
+
+  .section-label {
+    @apply text-[11px] font-mono font-semibold uppercase tracking-[0.12em] text-tertiary;
+  }
+}
+
+/* Subtle noise texture overlay */
+.noise-bg {
+  position: relative;
+}
+.noise-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
 }

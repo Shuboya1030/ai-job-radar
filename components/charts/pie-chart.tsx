@@ -2,16 +2,16 @@
 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
-const COLORS = ['#3b82f6', '#f97316', '#ef4444', '#22c55e', '#8b5cf6', '#eab308', '#ec4899', '#06b6d4', '#6366f1', '#78716c']
+const COLORS = ['#18181B', '#BFFF00', '#71717A', '#A1A1AA', '#D4D4D8', '#E4E4E7', '#F4F4F5']
 
 interface PieChartProps {
   data: { name: string; value: number }[]
   height?: number
 }
 
-export default function DonutChart({ data, height = 300 }: PieChartProps) {
+export default function DonutChart({ data, height = 260 }: PieChartProps) {
   if (!data || data.length === 0) {
-    return <div className="text-ink-muted text-sm py-8 text-center">No data available</div>
+    return <div className="text-faint text-xs font-mono py-8 text-center">NO DATA</div>
   }
 
   return (
@@ -21,25 +21,32 @@ export default function DonutChart({ data, height = 300 }: PieChartProps) {
           data={data}
           cx="50%"
           cy="50%"
-          innerRadius={60}
-          outerRadius={100}
+          innerRadius={55}
+          outerRadius={85}
           paddingAngle={2}
           dataKey="value"
+          strokeWidth={0}
         >
           {data.map((_, i) => (
             <Cell key={i} fill={COLORS[i % COLORS.length]} />
           ))}
         </Pie>
         <Tooltip
-          contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 13 }}
+          contentStyle={{
+            borderRadius: 4,
+            border: '1px solid #E4E4E7',
+            fontSize: 12,
+            fontFamily: 'JetBrains Mono',
+            padding: '6px 10px',
+          }}
         />
         <Legend
           verticalAlign="middle"
           align="right"
           layout="vertical"
-          iconType="circle"
+          iconType="square"
           iconSize={8}
-          wrapperStyle={{ fontSize: 13 }}
+          wrapperStyle={{ fontSize: 11, fontFamily: 'DM Sans' }}
         />
       </PieChart>
     </ResponsiveContainer>

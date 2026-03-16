@@ -1,66 +1,46 @@
-import { Radar, BarChart3, Briefcase, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 
 const roles = [
-  {
-    slug: 'ai-pm',
-    title: 'AI Product Manager',
-    emoji: '🎯',
-    color: 'from-violet-500 to-purple-600',
-  },
-  {
-    slug: 'ai-engineer',
-    title: 'AI Engineer',
-    emoji: '🤖',
-    color: 'from-brand-500 to-cyan-500',
-  },
-  {
-    slug: 'swe',
-    title: 'Software Engineer',
-    emoji: '💻',
-    color: 'from-emerald-500 to-teal-600',
-  },
+  { slug: 'ai-pm', title: 'AI PM', jobs: '130+', topSkill: 'Product Strategy' },
+  { slug: 'ai-engineer', title: 'AI Engineer', jobs: '120+', topSkill: 'Machine Learning' },
+  { slug: 'swe', title: 'SWE', jobs: '110+', topSkill: 'Algorithms' },
 ]
 
 export default function HomePage() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-brand-600 via-brand-700 to-brand-900 text-white">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,255,255,0.08),transparent)]" />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative">
+      <section className="noise-bg bg-primary text-white overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 relative z-10">
           <div className="max-w-2xl">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="px-3 py-1 rounded-full bg-white/10 text-sm font-medium">
-                Updated weekly
-              </div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-white/5 border border-white/10 mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-lime animate-pulse" />
+              <span className="text-2xs font-mono text-zinc-400">LIVE DATA &middot; UPDATED DAILY</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-              Your AI Career
-              <span className="text-accent-light"> Intelligence</span>
+
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1] mb-4">
+              AI startup jobs,
+              <br />
+              <span className="text-lime">decoded.</span>
             </h1>
-            <p className="text-lg text-blue-100 mb-8 leading-relaxed">
-              Real-time skill demand, salary benchmarks, and a unified job board
-              for AI professionals. Powered by data from 500+ weekly job postings.
+
+            <p className="text-base text-zinc-400 leading-relaxed mb-8 max-w-lg">
+              Real-time skill demand from 365+ job postings. Salary benchmarks.
+              Company funding data. Everything you need to land your next AI role.
             </p>
+
             <div className="flex gap-3">
               <Link
-                href="/market/ai-engineer"
-                className="px-6 py-3 bg-white text-brand-700 font-semibold rounded-xl hover:bg-blue-50 transition-colors"
+                href="/jobs"
+                className="px-5 py-2.5 bg-lime text-black font-semibold text-sm rounded hover:bg-lime-dark transition-colors"
               >
-                <span className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Market Analysis
-                </span>
+                Browse jobs
               </Link>
               <Link
-                href="/jobs"
-                className="px-6 py-3 bg-white/10 text-white font-semibold rounded-xl hover:bg-white/20 transition-colors border border-white/20"
+                href="/market/ai-engineer"
+                className="px-5 py-2.5 bg-white/5 text-white font-medium text-sm rounded border border-white/10 hover:bg-white/10 transition-colors"
               >
-                <span className="flex items-center gap-2">
-                  <Briefcase className="w-5 h-5" />
-                  Job Board
-                </span>
+                Market analysis
               </Link>
             </div>
           </div>
@@ -68,55 +48,67 @@ export default function HomePage() {
       </section>
 
       {/* Role Cards */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
+        <div className="grid grid-cols-3 gap-3">
           {roles.map((role) => (
             <Link
               key={role.slug}
               href={`/market/${role.slug}`}
-              className="group bg-white rounded-2xl p-6 shadow-lg shadow-slate-200/50 border border-slate-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-200"
+              className="card card-hover p-4 group"
             >
-              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${role.color} flex items-center justify-center text-2xl mb-4`}>
-                {role.emoji}
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-mono text-xs font-semibold text-tertiary">{role.title}</span>
+                <span className="badge bg-surface-raised text-tertiary">{role.jobs} jobs</span>
               </div>
-              <h3 className="text-lg font-bold text-ink mb-1">{role.title}</h3>
-              <p className="text-sm text-ink-muted mb-4">
-                Skills, salary, and resume insights
-              </p>
-              <div className="flex items-center text-sm font-medium text-brand-600 group-hover:text-brand-700">
-                View Analysis
-                <TrendingUp className="w-4 h-4 ml-1" />
+              <p className="text-sm font-semibold text-primary mb-1">Top skill</p>
+              <p className="text-sm text-secondary">{role.topSkill}</p>
+              <div className="mt-3 text-xs font-medium text-lime-dark opacity-0 group-hover:opacity-100 transition-opacity">
+                View analysis &rarr;
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Features */}
+      {/* What we do */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-        <h2 className="text-2xl font-bold text-center mb-12">
-          Two products. One goal: <span className="text-brand-600">land your AI role.</span>
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-white rounded-2xl p-8 border border-slate-100">
-            <div className="w-10 h-10 rounded-lg bg-brand-50 flex items-center justify-center mb-4">
-              <BarChart3 className="w-5 h-5 text-brand-600" />
-            </div>
-            <h3 className="text-lg font-bold mb-2">Market Analysis</h3>
-            <p className="text-ink-secondary leading-relaxed">
-              See what skills employers actually want. Ranked by frequency from
-              real job postings. Know exactly what to put on your resume.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div>
+            <span className="section-label">Market Intelligence</span>
+            <h2 className="text-2xl font-bold text-primary mt-2 mb-3">
+              Know what employers want
+            </h2>
+            <p className="text-sm text-secondary leading-relaxed mb-4">
+              We analyze 300+ job descriptions weekly using AI. Skills, tools, and
+              keywords ranked by frequency — so you know exactly what to put on your resume.
             </p>
+            <div className="space-y-2">
+              {['Hard skills ranked by % of JDs', 'Salary data by seniority', 'Must-have vs nice-to-have keywords'].map(item => (
+                <div key={item} className="flex items-center gap-2 text-sm text-secondary">
+                  <span className="w-1 h-1 rounded-full bg-lime" />
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="bg-white rounded-2xl p-8 border border-slate-100">
-            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center mb-4">
-              <Briefcase className="w-5 h-5 text-accent" />
-            </div>
-            <h3 className="text-lg font-bold mb-2">Job Board</h3>
-            <p className="text-ink-secondary leading-relaxed">
-              All AI jobs in one place. LinkedIn, Wellfound, YC startups.
-              Filter by role, industry, salary, and more. Apply in one click.
+
+          <div>
+            <span className="section-label">Job Aggregator</span>
+            <h2 className="text-2xl font-bold text-primary mt-2 mb-3">
+              Startup jobs you can&apos;t find on LinkedIn
+            </h2>
+            <p className="text-sm text-secondary leading-relaxed mb-4">
+              We pull from LinkedIn, YC startups, Greenhouse, and Lever career pages.
+              Every listing shows company funding so you can judge quality at a glance.
             </p>
+            <div className="space-y-2">
+              {['4 data sources, updated daily', 'Funding stage + amount on every card', 'Filter by industry, role, salary'].map(item => (
+                <div key={item} className="flex items-center gap-2 text-sm text-secondary">
+                  <span className="w-1 h-1 rounded-full bg-lime" />
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

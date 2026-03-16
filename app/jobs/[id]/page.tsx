@@ -64,13 +64,13 @@ export default function JobDetail() {
             </div>
           </div>
 
-          {/* Apply Button */}
+          {/* Apply Button — prominent, full width */}
           {job.apply_url && (
             <a
               href={job.apply_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 text-white font-semibold rounded-xl hover:bg-brand-700 transition-colors"
+              className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-lime text-black text-base font-bold rounded-lg hover:bg-lime-dark transition-colors shadow-[0_0_20px_rgba(191,255,0,0.3)]"
             >
               Apply Now <ExternalLink className="w-4 h-4" />
             </a>

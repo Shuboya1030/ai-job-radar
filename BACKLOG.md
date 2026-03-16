@@ -29,6 +29,16 @@
 | B-14 | Email alerts for new matching jobs | P2 | Weekly digest or real-time |
 | B-15 | Individual company career page scraping (Path A) | P3 | Per-company scraper for Greenhouse, Lever, Ashby, etc. High maintenance |
 
+### Data Quality & Discovery (from pipeline analysis 2026-03-16)
+| ID | Item | Priority | Notes |
+|----|------|----------|-------|
+| B-60 | ~~Company filter: hide staffing agencies~~ | ~~P0~~ | DONE: 45 non-AI companies deactivated |
+| B-61 | ~~Auto-discover career pages for new companies~~ | P0 | Pipeline Step 4: search + fetch career pages for newly discovered companies |
+| B-62 | "Hot This Week" label on recently funded companies | P1 | Highlight companies that raised funding in past 7 days. 2hrs frontend, $0 cost |
+| B-63 | Industry heat trend view | P1 | Show which industries have most funding + hiring. 4hrs, $0 cost |
+| B-64 | Company quality score | P2 | Composite score: funding + growth + job count. 3hrs, $0 cost |
+| B-65 | "Similar Companies" recommendation | P2 | Same industry + funding stage. 3hrs, $0 cost |
+
 ### Company Discovery Pipeline
 | ID | Item | Priority | Notes |
 |----|------|----------|-------|

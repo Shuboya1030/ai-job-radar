@@ -149,9 +149,12 @@ function JobCard({ job }: { job: any }) {
       href={`/jobs/${job.id}`}
       className="card card-hover p-4 flex flex-col group"
     >
-      {/* Company name */}
+      {/* Company name + Hot badge */}
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-semibold text-primary truncate">{job.company_name || 'Unknown'}</span>
+        {job.company_is_hot && (
+          <span className="badge bg-red-500 text-white text-2xs font-bold animate-pulse">HOT</span>
+        )}
       </div>
 
       {/* Funding + Industry — highlighted row */}

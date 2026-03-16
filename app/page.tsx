@@ -1,4 +1,7 @@
+'use client'
+
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 const roles = [
   { slug: 'ai-pm', title: 'AI PM', jobs: '130+', topSkill: 'Product Strategy' },
@@ -70,6 +73,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Industry Heat Map */}
+      <IndustryHeat />
+
       {/* What we do */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
@@ -114,4 +120,68 @@ export default function HomePage() {
       </section>
     </div>
   )
+}
+
+function IndustryHeat() {
+  const [data, setData] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch('/api/industries')
+      .then(r => r.json())
+      .then(d => setData(d.industries || []))
+      .catch(() => {})
+  }, [])
+
+  if (data.length === 0) return null
+
+  return (
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <span className="section-label">Industry Pulse</span>
+          <h2 className="text-xl font-bold text-primary mt-1">Hottest AI sectors right now</h2>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        {data.slice(0, 8).map((ind) => (
+          <Link
+            key={ind.name}
+            href={`/jobs?industry=${encodeURIComponent(ind.name)}`}
+            className="card card-hover p-4 group"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold text-primary">{ind.name}</span>
+              {ind.hotCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
+            </div>
+            <div className="space-y-1 text-2xs font-mono text-tertiary">
+              <div className="flex justify-between">
+                <span>Jobs</span>
+                <span className="text-primary font-semibold">{ind.jobs}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Companies</span>
+                <span>{ind.companies}</span>
+              </div>
+              {ind.totalFundingCents > 0 && (
+                <div className="flex justify-between">
+                  <span>Funding</span>
+                  <span className="text-lime-dark font-semibold">${formatFundingShort(ind.totalFundingCents)}</span>
+                </div>
+              )}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function formatFundingShort(cents: number): string {
+  const d = cents / 100
+  if (d >= 1e12) return `${(d / 1e12).toFixed(1)}T`
+  if (d >= 1e9) return `${(d / 1e9).toFixed(1)}B`
+  if (d >= 1e6) return `${Math.round(d / 1e6)}M`
+  return `${Math.round(d / 1e3)}K`
 }

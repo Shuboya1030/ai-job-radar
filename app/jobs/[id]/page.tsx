@@ -106,6 +106,9 @@ export default function JobDetail() {
               {job.description || 'No description available.'}
             </div>
           </div>
+
+          {/* Similar Companies */}
+          <SimilarCompanies industry={job.company_industry || job.industry} excludeName={job.company_name} />
         </div>
 
         {/* Sidebar — Company Card */}
@@ -149,6 +152,52 @@ function InfoRow({ icon: Icon, label, value }: { icon: any; label: string; value
       <div>
         <p className="text-xs text-ink-muted">{label}</p>
         <p className="text-ink font-medium">{value}</p>
+      </div>
+    </div>
+  )
+}
+
+function SimilarCompanies({ industry, excludeName }: { industry: string | null; excludeName: string | null }) {
+  const [companies, setCompanies] = useState<any[]>([])
+
+  useEffect(() => {
+    if (!industry || industry === 'Other') return
+    const params = new URLSearchParams({ industry })
+    if (excludeName) params.set('exclude', excludeName)
+    params.set('limit', '4')
+    fetch(`/api/companies/similar?${params}`)
+      .then(r => r.json())
+      .then(d => setCompanies(d.companies || []))
+      .catch(() => {})
+  }, [industry, excludeName])
+
+  if (companies.length === 0) return null
+
+  return (
+    <div>
+      <h2 className="section-label mb-3">Similar companies in {industry}</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {companies.map((co: any) => (
+          <Link
+            key={co.id}
+            href={`/jobs?search=${encodeURIComponent(co.name)}`}
+            className="card card-hover p-3 group"
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-primary truncate">{co.name}</span>
+              {co.is_hot && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+            </div>
+            {co.funding_amount_cents && co.funding_amount_status === 'known' && (
+              <p className="text-2xs font-mono text-lime-dark">
+                {co.funding_stage && co.funding_stage !== 'Unknown' ? `${co.funding_stage} · ` : ''}
+                ${formatFunding(co.funding_amount_cents)}
+              </p>
+            )}
+            {co.open_jobs > 0 && (
+              <p className="text-2xs text-tertiary mt-1">{co.open_jobs} open jobs</p>
+            )}
+          </Link>
+        ))}
       </div>
     </div>
   )

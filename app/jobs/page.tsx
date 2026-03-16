@@ -142,16 +142,28 @@ function JobCard({ job }: { job: any }) {
     return null
   })()
 
+  const industry = job.industry && job.industry !== 'Other' ? job.industry : (job.company_industry && job.company_industry !== 'Other' ? job.company_industry : null)
+
   return (
     <Link
       href={`/jobs/${job.id}`}
       className="card card-hover p-4 flex flex-col group"
     >
-      {/* Top row: company + industry */}
-      <div className="flex items-center justify-between mb-2">
+      {/* Company name */}
+      <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-semibold text-primary truncate">{job.company_name || 'Unknown'}</span>
-        {job.industry && job.industry !== 'Other' && (
-          <span className="badge bg-surface-raised text-tertiary ml-2">{job.industry}</span>
+      </div>
+
+      {/* Funding + Industry — highlighted row */}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        {fundingDisplay && (
+          <span className="badge bg-lime text-black font-semibold">{fundingDisplay}</span>
+        )}
+        {!fundingDisplay && (
+          <span className="badge bg-zinc-100 text-faint">Funding unknown</span>
+        )}
+        {industry && (
+          <span className="badge bg-primary/5 text-primary font-medium">{industry}</span>
         )}
       </div>
 
@@ -160,29 +172,21 @@ function JobCard({ job }: { job: any }) {
         {job.title}
       </h3>
 
-      {/* Funding */}
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <span className="w-1.5 h-1.5 rounded-full bg-lime flex-shrink-0" />
-        <span className="text-2xs font-mono text-tertiary truncate">
-          {fundingDisplay || 'Funding unknown'}
-        </span>
-      </div>
-
       {/* Salary */}
       {salary && (
         <p className="text-sm font-mono font-semibold text-primary mb-2">{salary}</p>
       )}
 
-      {/* Tags */}
+      {/* Tags — low visual weight */}
       <div className="flex flex-wrap gap-1 mt-auto pt-2">
         {job.role_category && (
-          <span className="badge bg-primary text-white">{job.role_category}</span>
+          <span className="badge bg-surface-raised text-tertiary">{job.role_category}</span>
         )}
         {job.work_type && job.work_type !== 'Unknown' && (
-          <span className="badge bg-surface-raised text-secondary">{job.work_type}</span>
+          <span className="badge bg-surface-raised text-tertiary">{job.work_type}</span>
         )}
         {job.location && (
-          <span className="text-2xs text-faint truncate max-w-[130px]">{job.location}</span>
+          <span className="text-2xs text-faint truncate max-w-[140px]">{job.location}</span>
         )}
       </div>
     </Link>

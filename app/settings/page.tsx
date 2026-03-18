@@ -74,7 +74,24 @@ export default function SettingsPage() {
         setSubs(prev => [sub, ...prev])
         setShowForm(false)
         resetForm()
-        setMessage({ type: 'success', text: `Alert "${name}" created! You'll receive ${frequency} emails when matching jobs appear.` })
+        setMessage({ type: 'success', text: `Alert "${name}" created! Sending your first email now...` })
+
+        // Send first alert immediately
+        try {
+          const sendRes = await fetch('/api/subscriptions/send-now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscription_id: sub.id }),
+          })
+          const sendData = await sendRes.json()
+          if (sendData.sent) {
+            setMessage({ type: 'success', text: `Alert "${sub.name}" is live! ${sendData.message}` })
+          } else {
+            setMessage({ type: 'success', text: `Alert "${sub.name}" created! ${sendData.message}` })
+          }
+        } catch {
+          setMessage({ type: 'success', text: `Alert "${sub.name}" created! First email will be sent on schedule.` })
+        }
       } else {
         const err = await res.json().catch(() => ({}))
         setMessage({ type: 'error', text: err.error || `Failed to create alert (${res.status}). Please try again.` })

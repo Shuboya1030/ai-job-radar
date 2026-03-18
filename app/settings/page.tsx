@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [workTypes, setWorkTypes] = useState<string[]>([])
   const [frequency, setFrequency] = useState('weekly')
   const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     if (!user) { setLoading(false); return }
@@ -61,16 +62,25 @@ export default function SettingsPage() {
 
   async function createSubscription() {
     setSaving(true)
-    const res = await fetch('/api/subscriptions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, roles, industries, funding_stages: fundingStages, work_types: workTypes, frequency }),
-    })
-    if (res.ok) {
-      const sub = await res.json()
-      setSubs(prev => [sub, ...prev])
-      setShowForm(false)
-      resetForm()
+    setMessage(null)
+    try {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, roles, industries, funding_stages: fundingStages, work_types: workTypes, frequency }),
+      })
+      if (res.ok) {
+        const sub = await res.json()
+        setSubs(prev => [sub, ...prev])
+        setShowForm(false)
+        resetForm()
+        setMessage({ type: 'success', text: `Alert "${name}" created! You'll receive ${frequency} emails when matching jobs appear.` })
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setMessage({ type: 'error', text: err.error || `Failed to create alert (${res.status}). Please try again.` })
+      }
+    } catch (e) {
+      setMessage({ type: 'error', text: 'Network error. Please check your connection and try again.' })
     }
     setSaving(false)
   }
@@ -102,6 +112,17 @@ export default function SettingsPage() {
           </button>
         )}
       </div>
+
+      {/* Status Message */}
+      {message && (
+        <div className={`card p-4 mb-6 border-l-4 ${
+          message.type === 'success' ? 'border-l-lime bg-lime/5' : 'border-l-red-500 bg-red-50'
+        }`}>
+          <p className={`text-sm font-medium ${message.type === 'success' ? 'text-lime-dark' : 'text-red-600'}`}>
+            {message.text}
+          </p>
+        </div>
+      )}
 
       {/* Create Form */}
       {showForm && (

@@ -29,6 +29,12 @@ def write_jobs(supabase, raw_jobs, enriched_jobs, role_category, source="LinkedI
         job_id = raw.get("JobId")
         enriched = enrich_map.get(job_id, {})
 
+        # Quality gate: skip jobs without real content
+        desc = raw.get("JobDescription", "") or ""
+        apply = raw.get("apply_url", "") or ""
+        if len(desc) < 50 and not apply:
+            continue  # Skip empty shell jobs
+
         # Resolve company
         company_id = resolve_company(
             supabase,
@@ -62,7 +68,7 @@ def write_jobs(supabase, raw_jobs, enriched_jobs, role_category, source="LinkedI
             "tools": json.dumps(enriched.get("tools", [])),
             "experience_years": enriched.get("experience_years", "Unknown"),
             "industry": enriched.get("industry", "Other"),
-            "apply_url": f"https://www.linkedin.com/jobs/view/{job_id}/" if source == "LinkedIn" else None,
+            "apply_url": raw.get("apply_url") or (f"https://www.linkedin.com/jobs/view/{job_id}/" if source == "LinkedIn" else None),
             "scraped_at": now,
             "last_seen_at": now,
             "is_active": True,

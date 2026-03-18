@@ -113,16 +113,21 @@ def _parse_yc_jobs(page):
                 # Create unique source ID
                 source_id = f"yc-{company_name}-{title}".lower().replace(" ", "-")[:100]
 
+                # YC apply URL pattern
+                company_slug = company_name.lower().replace(" ", "-").replace(".", "")
+                apply_url = f"https://www.workatastartup.com/companies/{company_slug}"
+
                 jobs.append({
                     "JobId": source_id,
                     "JobTitle": title,
                     "CompanyName": company_name,
-                    "CompanyUrl": None,  # YC doesn't show URLs inline
+                    "CompanyUrl": apply_url,
                     "Location": location,
                     "TimePosted": time_posted,
                     "JobDescription": f"{title} at {company_name} (YC {batch}). {meta}",
                     "SeniorityLevel": None,
                     "EmploymentType": employment_type,
+                    "apply_url": apply_url,
                     "_source": "YC",
                     "_batch": batch,
                     "_work_type": work_type,

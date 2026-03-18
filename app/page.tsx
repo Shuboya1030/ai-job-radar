@@ -74,11 +74,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Industry Heat Map */}
-      <IndustryHeat />
-
       {/* Alert CTA — dark interruption band */}
       <AlertCTA />
+
+      {/* Industry Heat Map */}
+      <IndustryHeat />
 
       {/* What we do */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">

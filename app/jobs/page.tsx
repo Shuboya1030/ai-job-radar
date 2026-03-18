@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import SaveButton from '@/components/save-button'
+import AlertBanner from '@/components/alert-banner'
 
 const ROLE_OPTIONS = ['AI PM', 'AI Engineer', 'Software Engineer']
 const WORK_TYPE_OPTIONS = ['Remote', 'Hybrid', 'On-site']
@@ -76,6 +77,9 @@ export default function JobBoard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Alert Banner */}
+      <AlertBanner />
+
       {/* Header */}
       <div className="flex items-end justify-between mb-6">
         <div>

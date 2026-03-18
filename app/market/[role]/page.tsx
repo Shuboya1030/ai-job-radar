@@ -7,6 +7,7 @@ import HorizontalBarChart from '@/components/charts/bar-chart'
 import DonutChart from '@/components/charts/pie-chart'
 import SalaryRangeChart from '@/components/charts/salary-chart'
 import type { MarketSnapshot } from '@/types/database'
+import AlertBanner from '@/components/alert-banner'
 
 const ROLE_LABELS: Record<string, string> = {
   'ai-pm': 'AI Product Manager',
@@ -39,6 +40,9 @@ export default function MarketDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Alert Banner */}
+      <AlertBanner />
+
       {/* Header */}
       <div className="flex items-center gap-2 text-2xs font-mono text-faint mb-4">
         <Link href="/" className="hover:text-primary">Home</Link>

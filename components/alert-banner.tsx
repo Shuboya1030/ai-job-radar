@@ -1,7 +1,6 @@
 'use client'
 
 import { useAuth } from '@/components/auth-provider'
-import { Bell } from 'lucide-react'
 
 export default function AlertBanner() {
   const { user, signInWithGoogle } = useAuth()
@@ -15,21 +14,26 @@ export default function AlertBanner() {
   }
 
   return (
-    <div className="bg-primary rounded-lg p-4 flex items-center justify-between gap-4 mb-6">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="card border-zinc-200 p-5 flex items-center justify-between gap-6 mb-6">
+      <div className="flex items-center gap-4 min-w-0">
         <div className="flex -space-x-0.5 flex-shrink-0">
-          <span className="w-2 h-2 rounded-full bg-lime animate-pulse" />
-          <span className="w-2 h-2 rounded-full bg-lime/50 animate-pulse" style={{ animationDelay: '200ms' }} />
+          <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+          <span className="w-2.5 h-2.5 rounded-full bg-primary/40 animate-pulse" style={{ animationDelay: '200ms' }} />
         </div>
-        <p className="text-xs text-zinc-400 truncate">
-          <span className="text-white font-semibold">Get alerts</span> when new matching jobs appear — delivered to your inbox
-        </p>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-primary">
+            Get alerts when new matching jobs appear
+          </p>
+          <p className="text-xs text-secondary mt-0.5">
+            Set your filters and receive matched jobs straight to your inbox
+          </p>
+        </div>
       </div>
       <button
         onClick={handleClick}
-        className="flex-shrink-0 px-3 py-1.5 bg-lime text-black text-xs font-bold rounded hover:bg-lime-dark transition-colors"
+        className="flex-shrink-0 px-4 py-2 bg-primary text-white text-xs font-bold rounded hover:bg-zinc-800 transition-colors"
       >
-        {user ? 'Set up alerts' : 'Sign in'}
+        {user ? 'Set up alerts' : 'Sign in to get alerts'}
       </button>
     </div>
   )

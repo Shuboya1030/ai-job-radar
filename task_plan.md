@@ -1,51 +1,58 @@
-# AIJobRadar Agent Implementation — Task Plan
+# User System Implementation — Task Plan
 
 ## Goal
-Implement the Claude Agent as full pipeline manager per design spec at `docs/superpowers/specs/2026-03-15-agent-architecture-design.md`.
+Implement Google Auth + Email Subscriptions + Saved Jobs per specs at docs/superpowers/specs/2026-03-18-*.md
 
 ## Success Criteria
-- SC1: Funding coverage > 50%, tracked in admin dashboard
-- SC2: Field-level source_url traceability for all data writes
-- SC3: Passive company liveness monitoring (website down + no jobs 30d = flagged)
+1. All 4 key user journeys work end-to-end
+2. Full unit test coverage
 
-## Phases
+## Key User Journeys
+- J1: Sign In → Google OAuth → profile created → avatar in nav
+- J2: Set Alerts → choose filters → save subscription → confirmed
+- J3: Save Job → click bookmark → appears in /saved
+- J4: Receive Email → matching jobs found → card-style email sent
 
-### Phase 1: Foundation (DB + Dependencies)
-- [x] 1.1 Install Claude Agent SDK (`anthropic` package)
-- [ ] 1.2 DB migration: Create `agent_runs` table
-- [ ] 1.3 DB migration: Add `funding_source_url`, `funding_updated_at`, `discovered_via` to `companies`
-- [ ] 1.4 DB migration: Add `listing_source_url` to `jobs`
-- [ ] 1.5 Update `scrapers/requirements.txt`
+## Status
 
-### Phase 2: Agent Tools (6 tools)
-- [ ] 2.1 `supabase_query` — read/write database
-- [ ] 2.2 `trigger_github_action` — trigger GH workflow via `gh` CLI
-- [ ] 2.3 `web_search` — search internet for companies/news
-- [ ] 2.4 `web_fetch` — read any webpage content
-- [ ] 2.5 `run_python` — execute existing Python scripts
-- [ ] 2.6 `check_health` — HTTP ping company website
+### Phase 0: Setup
+- [x] DB tables created (user_profiles, subscriptions, saved_jobs, notification_log)
+- [x] @supabase/ssr + resend packages installed
+- [x] lib/supabase-auth.ts created
+- [x] components/auth-provider.tsx created (needs integration)
+- [ ] Google OAuth credentials (BLOCKER: needs manual setup in Google Console)
+- [ ] Supabase Auth Google provider enabled (BLOCKER: needs OAuth creds first)
+- [ ] Resend API key (can work around with mock for now)
 
-### Phase 3: Agent Core
-- [ ] 3.1 Agent system prompt (planning skill, success criteria, rules)
-- [ ] 3.2 Agent main script using Claude Agent SDK with tool bindings
-- [ ] 3.3 Agent decision loop (read state → decide priorities → execute → report)
-- [ ] 3.4 Run logging to `agent_runs` table
+### Phase 1: Auth Integration
+- [ ] 1.1 Auth callback route (app/api/auth/callback/route.ts)
+- [ ] 1.2 Wrap layout.tsx with AuthProvider
+- [ ] 1.3 Update nav.tsx with Sign In button + user dropdown
+- [ ] 1.4 Server-side auth helper (lib/supabase-server.ts)
 
-### Phase 4: Admin Dashboard Updates
-- [ ] 4.1 API: funding coverage %, source breakdown, agent run history
-- [ ] 4.2 UI: funding coverage gauge
-- [ ] 4.3 UI: agent run history table
-- [ ] 4.4 UI: source traceability view (funding_source_url per company)
+### Phase 2: Subscription System
+- [ ] 2.1 Subscription API routes (GET/POST/PUT/DELETE)
+- [ ] 2.2 Settings page UI (app/settings/page.tsx)
+- [ ] 2.3 Email send script (scrapers/send_notifications.py)
+- [ ] 2.4 GitHub Actions workflow for notifications
 
-### Phase 5: Testing & Verification
-- [ ] 5.1 Unit tests for each tool
-- [ ] 5.2 Dry-run agent (read-only, no writes) to verify decision logic
-- [ ] 5.3 Full agent run with writes, verify data in Supabase
-- [ ] 5.4 Verify admin dashboard shows correct metrics
+### Phase 3: Saved Jobs
+- [ ] 3.1 Saved jobs API routes (GET/POST/DELETE)
+- [ ] 3.2 Save button component
+- [ ] 3.3 Update job cards with save button
+- [ ] 3.4 Saved jobs page (app/saved/page.tsx)
 
-## Decisions Log
-- 2026-03-15: Single agent (not multi-agent) — simpler, sufficient for workload
-- 2026-03-15: GitHub Actions stays as bulk scraping tool called by agent
-- 2026-03-15: Passive company monitoring first, upgrade to active if needed
-- 2026-03-15: Field-level source traceability, admin-only visibility
-- 2026-03-15: Agent uses web_search + web_fetch to discover ANY career page (not just Greenhouse/Lever)
+### Phase 4: Analytics + Polish
+- [ ] 4.1 Update analytics.tsx to send user_id
+- [ ] 4.2 Update admin stats to use user_id
+
+### Phase 5: Tests
+- [ ] 5.1 Auth flow tests
+- [ ] 5.2 Subscription API tests
+- [ ] 5.3 Saved jobs API tests
+- [ ] 5.4 Email matching logic tests
+
+## Decisions
+- Google OAuth creds not yet available → build everything else, test with mock auth
+- Resend API key not yet available → build email template + send logic, test with console output
+- Auth provider wraps layout as client boundary component

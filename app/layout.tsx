@@ -3,6 +3,7 @@ import './globals.css'
 import Nav from '@/components/nav'
 import Footer from '@/components/footer'
 import Analytics from '@/components/analytics'
+import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
   title: 'AIJobRadar — AI Career Intelligence',
@@ -17,10 +18,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col">
-        <Nav />
-        <Analytics />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        <Providers>
+          <Nav />
+          <Analytics />
+          <main className="flex-1">{children}</main>
+          <Footer />
+        </Providers>
       </body>
     </html>
   )

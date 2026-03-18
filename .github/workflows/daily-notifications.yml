@@ -1,0 +1,39 @@
+name: Daily Email Notifications
+
+on:
+  schedule:
+    - cron: '0 7 * * *'  # Daily UTC 7:00 (1 hour after daily scrape)
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd scrapers
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Send notifications
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: |
+          cd scrapers
+          python -u send_notifications.py
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::error::Email notifications failed!"

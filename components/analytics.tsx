@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/auth-provider'
 
 function getVisitorId(): string {
   if (typeof window === 'undefined') return ''
@@ -16,9 +17,9 @@ function getVisitorId(): string {
 
 export default function Analytics() {
   const pathname = usePathname()
+  const { user } = useAuth()
 
   useEffect(() => {
-    // Don't track admin pages
     if (pathname.startsWith('/admin')) return
 
     const visitorId = getVisitorId()
@@ -28,8 +29,9 @@ export default function Analytics() {
       referrer: document.referrer || null,
       user_agent: navigator.userAgent,
       visitor_id: visitorId,
+      user_id: user?.id || null,
     }).then(() => {})
-  }, [pathname])
+  }, [pathname, user])
 
   return null
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import SaveButton from '@/components/save-button'
 
 const ROLE_OPTIONS = ['AI PM', 'AI Engineer', 'Software Engineer']
 const WORK_TYPE_OPTIONS = ['Remote', 'Hybrid', 'On-site']
@@ -156,12 +157,15 @@ function JobCard({ job }: { job: any }) {
       href={`/jobs/${job.id}`}
       className="card card-hover p-4 flex flex-col group"
     >
-      {/* Company name + Hot badge */}
+      {/* Company name + Hot badge + Save */}
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-semibold text-primary truncate">{job.company_name || 'Unknown'}</span>
-        {job.company_is_hot && (
-          <span className="badge bg-red-500 text-white text-2xs font-bold animate-pulse">HOT</span>
-        )}
+        <div className="flex items-center gap-1">
+          {job.company_is_hot && (
+            <span className="badge bg-red-500 text-white text-2xs font-bold animate-pulse">HOT</span>
+          )}
+          <SaveButton jobId={job.id} size="sm" />
+        </div>
       </div>
 
       {/* Funding + Industry — highlighted row */}

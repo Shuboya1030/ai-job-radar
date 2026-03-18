@@ -139,8 +139,8 @@ function AlertCTA() {
 
   return (
     <section className="relative overflow-hidden">
-      {/* Light band with subtle border */}
-      <div className="border-y border-zinc-200 bg-white">
+      {/* Lime band — impossible to miss */}
+      <div className="bg-lime">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14">
           <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-8 items-center">
 
@@ -148,19 +148,19 @@ function AlertCTA() {
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="flex -space-x-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0ms' }} />
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary/50 animate-pulse" style={{ animationDelay: '200ms' }} />
-                  <span className="w-2.5 h-2.5 rounded-full bg-primary/20 animate-pulse" style={{ animationDelay: '400ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-black animate-pulse" style={{ animationDelay: '0ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-black/40 animate-pulse" style={{ animationDelay: '200ms' }} />
+                  <span className="w-2.5 h-2.5 rounded-full bg-black/15 animate-pulse" style={{ animationDelay: '400ms' }} />
                 </div>
-                <span className="text-2xs font-mono text-tertiary uppercase tracking-widest">Job Alerts</span>
+                <span className="text-2xs font-mono text-black/50 uppercase tracking-widest">Job Alerts</span>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-bold text-primary leading-tight mb-3">
+              <h2 className="text-2xl sm:text-3xl font-bold text-black leading-tight mb-3">
                 New AI startup jobs,<br />
-                <span className="text-lime-dark">straight to your inbox.</span>
+                straight to your inbox.
               </h2>
 
-              <p className="text-sm text-secondary leading-relaxed max-w-md mb-6">
+              <p className="text-sm text-black/60 leading-relaxed max-w-md mb-6">
                 Set your filters — role, industry, funding stage — and get matched jobs
                 delivered {user ? 'on your schedule' : 'weekly'}. Never miss a hiring window at a freshly funded startup.
               </p>
@@ -168,37 +168,37 @@ function AlertCTA() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={handleClick}
-                  className="px-5 py-2.5 bg-primary text-white font-bold text-sm rounded hover:bg-zinc-800 transition-colors"
+                  className="px-5 py-2.5 bg-black text-lime font-bold text-sm rounded hover:bg-zinc-800 transition-colors"
                 >
                   {user ? 'Set up alerts' : 'Sign in to get alerts'}
                 </button>
-                <span className="text-2xs font-mono text-faint">Free · No spam · Unsubscribe anytime</span>
+                <span className="text-2xs font-mono text-black/40">Free · No spam · Unsubscribe anytime</span>
               </div>
             </div>
 
             {/* Right: Visual — fake email preview */}
             <div className="hidden md:block w-72 -rotate-2 hover:rotate-0 transition-transform duration-500">
-              <div className="bg-surface-raised rounded-lg border border-zinc-200 p-4 shadow-lg">
-                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-zinc-100">
+              <div className="bg-black rounded-lg p-4 shadow-2xl">
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-zinc-800">
                   <div className="w-1.5 h-1.5 rounded-full bg-lime" />
-                  <span className="text-2xs font-mono text-tertiary">AIJobRadar Alert</span>
+                  <span className="text-2xs font-mono text-zinc-500">AIJobRadar Alert</span>
                 </div>
-                <p className="text-xs font-semibold text-primary mb-2">3 new jobs match your alert</p>
+                <p className="text-xs font-semibold text-white mb-2">3 new jobs match your alert</p>
                 {[
                   { company: 'Decagon', role: 'AI Engineer', funding: 'Series D · $481M' },
                   { company: 'Nscale', role: 'ML Platform', funding: 'Series C · $2B' },
                   { company: 'Grow Therapy', role: 'Senior SWE', funding: 'Series D · $328M' },
                 ].map((j, i) => (
-                  <div key={i} className="py-2 border-t border-zinc-100">
+                  <div key={i} className="py-2 border-t border-zinc-800">
                     <div className="flex justify-between items-center">
-                      <span className="text-2xs font-semibold text-primary">{j.company}</span>
-                      <span className="text-2xs font-mono text-lime-dark">{j.funding}</span>
+                      <span className="text-2xs font-semibold text-zinc-300">{j.company}</span>
+                      <span className="text-2xs font-mono text-lime">{j.funding}</span>
                     </div>
-                    <span className="text-2xs text-tertiary">{j.role}</span>
+                    <span className="text-2xs text-zinc-500">{j.role}</span>
                   </div>
                 ))}
-                <div className="mt-2 pt-2 border-t border-zinc-100">
-                  <span className="text-2xs font-mono text-lime-dark">View all matches →</span>
+                <div className="mt-2 pt-2 border-t border-zinc-800">
+                  <span className="text-2xs font-mono text-lime">View all matches →</span>
                 </div>
               </div>
             </div>

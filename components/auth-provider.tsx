@@ -95,12 +95,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut({ scope: 'local' })
+    await supabase.auth.signOut({ scope: 'global' })
     setUser(null)
     setSession(null)
-    // Clear any Supabase tokens from storage
+    // Clear Supabase tokens from localStorage
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('sb-')) localStorage.removeItem(key)
+    })
+    // Clear Supabase cookies
+    document.cookie.split(';').forEach(c => {
+      const name = c.trim().split('=')[0]
+      if (name.startsWith('sb-')) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      }
     })
     window.location.href = '/'
   }

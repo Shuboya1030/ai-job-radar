@@ -15,10 +15,9 @@ export async function extractText(buffer: Buffer, fileType: FileType): Promise<s
 
   switch (fileType) {
     case 'pdf': {
-      // Dynamic import to avoid pdfjs-dist webpack conflicts with Next.js
-      const { PDFParse } = await import('pdf-parse')
-      const parser = new PDFParse({ data: new Uint8Array(buffer) })
-      const result = await parser.getText()
+      // pdf-parse@1.1.1 — classic version, works in Node.js/serverless without DOM
+      const pdfParse = (await import('pdf-parse')).default
+      const result = await pdfParse(buffer)
       text = result.text
       break
     }

@@ -8,7 +8,7 @@ import clsx from 'clsx'
 
 const links = [
   { href: '/', label: 'Overview' },
-  { href: '/market/ai-engineer', label: 'Market' },
+  { href: '/market/ai-engineer', label: 'Skills' },
   { href: '/jobs', label: 'Jobs' },
   { href: '/compare', label: 'Compare' },
 ]

@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import SaveButton from '@/components/save-button'
 import AlertBanner from '@/components/alert-banner'
-import ResumeCTA from '@/components/resume-cta'
 import MatchBadge from '@/components/match-badge'
 import { useAuth } from '@/components/auth-provider'
 
@@ -102,11 +101,8 @@ export default function JobBoard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Alert Banner */}
+      {/* Smart banner: resume upload or alert setup based on user state */}
       <AlertBanner />
-
-      {/* Resume CTA for users without matches */}
-      {user && Object.keys(matchMap).length === 0 && <ResumeCTA />}
 
       {/* Header */}
       <div className="flex items-end justify-between mb-6">

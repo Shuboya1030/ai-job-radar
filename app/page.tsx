@@ -80,6 +80,9 @@ export default function HomePage() {
       {/* Industry Heat Map */}
       <IndustryHeat />
 
+      {/* Upcoming Feature — Resume Matching */}
+      <UpcomingResumeMatch />
+
       {/* What we do */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
@@ -261,6 +264,131 @@ function IndustryHeat() {
             </div>
           </Link>
         ))}
+      </div>
+    </section>
+  )
+}
+
+function UpcomingResumeMatch() {
+  return (
+    <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+      <div className="relative overflow-hidden rounded-xl bg-primary border border-zinc-800">
+        {/* Animated scan lines background */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, #BFFF00 2px, #BFFF00 3px)`,
+          backgroundSize: '100% 8px',
+          animation: 'scanlines 8s linear infinite',
+        }} />
+
+        {/* Radial glow from center-right */}
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-96 h-96 rounded-full opacity-10"
+          style={{ background: 'radial-gradient(circle, #BFFF00 0%, transparent 70%)' }}
+        />
+
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-[1fr,auto] gap-8 items-center p-8 sm:p-12">
+          {/* Left: Content */}
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded bg-lime/10 border border-lime/20 mb-5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-lime" />
+              </span>
+              <span className="text-2xs font-mono text-lime tracking-widest uppercase">Coming Soon</span>
+            </div>
+
+            <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-3">
+              Upload your resume.
+              <br />
+              <span className="text-lime">Get matched instantly.</span>
+            </h2>
+
+            <p className="text-sm text-zinc-400 leading-relaxed max-w-lg mb-6">
+              Drop your resume and our AI will match you with the best roles from 600+
+              job listings — scored, ranked, and explained. See exactly which skills you
+              have, which you&apos;re missing, and what to learn next.
+            </p>
+
+            {/* Feature pills */}
+            <div className="flex flex-wrap gap-2 mb-8">
+              {[
+                'AI-powered matching',
+                'Strong / Good / Stretch scores',
+                'Skills gap analysis',
+                'PDF, DOCX & Markdown',
+              ].map((feature) => (
+                <span
+                  key={feature}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-2xs font-mono text-zinc-400"
+                >
+                  <span className="w-1 h-1 rounded-full bg-lime" />
+                  {feature}
+                </span>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4">
+              <span className="px-5 py-2.5 bg-zinc-800 text-zinc-500 font-semibold text-sm rounded border border-zinc-700 cursor-default select-none">
+                Available soon
+              </span>
+              <span className="text-2xs font-mono text-zinc-600">Free for all users</span>
+            </div>
+          </div>
+
+          {/* Right: Visual — fake match preview card */}
+          <div className="hidden md:block w-72">
+            <div className="bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-lg p-4 shadow-2xl -rotate-1 hover:rotate-0 transition-transform duration-500">
+              {/* Header */}
+              <div className="flex items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
+                <div className="w-6 h-6 rounded bg-lime/20 flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-lime" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <span className="text-2xs font-mono text-zinc-500">Your Top Matches</span>
+              </div>
+
+              {/* Mock matches */}
+              {[
+                { company: 'OpenAI', role: 'ML Engineer', score: 94, tier: 'strong', color: 'bg-lime text-black' },
+                { company: 'Anthropic', role: 'Research Engineer', score: 87, tier: 'strong', color: 'bg-lime text-black' },
+                { company: 'Waymo', role: 'Senior SWE', score: 72, tier: 'good', color: 'bg-yellow-400 text-black' },
+                { company: 'Nuro', role: 'AI Engineer', score: 48, tier: 'stretch', color: 'bg-orange-400 text-black' },
+              ].map((match, i) => (
+                <div key={i} className={`py-2.5 ${i > 0 ? 'border-t border-zinc-800' : ''}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-semibold text-zinc-200">{match.company}</span>
+                    <span className={`text-2xs font-mono font-bold px-1.5 py-0.5 rounded ${match.color}`}>
+                      {match.score}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xs text-zinc-500">{match.role}</span>
+                    <span className="text-2xs font-mono text-zinc-600 capitalize">{match.tier}</span>
+                  </div>
+                </div>
+              ))}
+
+              {/* Skills gap teaser */}
+              <div className="mt-3 pt-3 border-t border-zinc-800">
+                <div className="text-2xs font-mono text-zinc-600 mb-2">Skills Gap</div>
+                <div className="flex gap-1.5">
+                  {['Python', 'PyTorch', 'NLP'].map(s => (
+                    <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-lime/10 text-lime border border-lime/20">{s}</span>
+                  ))}
+                  <span className="text-2xs px-1.5 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20">K8s</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CSS for scan animation */}
+        <style jsx>{`
+          @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(8px); }
+          }
+        `}</style>
       </div>
     </section>
   )

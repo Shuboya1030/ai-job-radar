@@ -28,7 +28,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'retention'>('overview')
+  const [tab, setTab] = useState<'overview' | 'retention' | 'matches'>('overview')
 
   const login = async () => {
     setLoading(true); setError('')
@@ -83,12 +83,12 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-bold text-primary">Admin Dashboard</h1>
         <div className="flex gap-0.5 border-b border-zinc-200">
-          {(['overview', 'retention'] as const).map(t => (
+          {(['overview', 'retention', 'matches'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${
                 tab === t ? 'border-primary text-primary' : 'border-transparent text-tertiary hover:text-secondary'
               }`}>
-              {t === 'overview' ? 'Overview' : 'Retention'}
+              {t === 'overview' ? 'Overview' : t === 'retention' ? 'Retention' : 'Match Quality'}
             </button>
           ))}
         </div>
@@ -246,6 +246,155 @@ export default function AdminDashboard() {
             ) : <p className="text-tertiary text-xs text-center py-4">No power users yet (need 3+ days of data)</p>}
           </div>
         </>
+      )}
+
+      {tab === 'matches' && <MatchQualityPanel password={password} />}
+    </div>
+  )
+}
+
+function MatchQualityPanel({ password }: { password: string }) {
+  const [matches, setMatches] = useState<any[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState({ tier: '', feedback: '' })
+  const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({})
+
+  const fetchMatches = async () => {
+    setLoading(true)
+    const params = new URLSearchParams()
+    if (filter.tier) params.set('tier', filter.tier)
+    if (filter.feedback) params.set('feedback', filter.feedback)
+    params.set('limit', '30')
+
+    const res = await fetch(`/api/admin/match-reviews?${params}`, {
+      headers: { 'x-admin-password': password },
+    })
+    const data = await res.json()
+    setMatches(data.matches || [])
+    setTotal(data.total || 0)
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchMatches() }, [filter])
+
+  const submitReview = async (matchId: string, verdict: string) => {
+    await fetch('/api/admin/match-reviews', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ match_id: matchId, verdict, notes: reviewNotes[matchId] || '' }),
+    })
+    fetchMatches()
+  }
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="flex gap-2 mb-6">
+        <select value={filter.tier} onChange={e => setFilter(f => ({ ...f, tier: e.target.value }))}
+          className="px-3 py-1.5 rounded border border-zinc-200 text-xs bg-white">
+          <option value="">All Tiers</option>
+          <option value="strong">Strong</option>
+          <option value="good">Good</option>
+          <option value="stretch">Stretch</option>
+        </select>
+        <select value={filter.feedback} onChange={e => setFilter(f => ({ ...f, feedback: e.target.value }))}
+          className="px-3 py-1.5 rounded border border-zinc-200 text-xs bg-white">
+          <option value="">All Feedback</option>
+          <option value="up">Thumbs Up</option>
+          <option value="down">Thumbs Down</option>
+        </select>
+        <span className="text-2xs font-mono text-tertiary self-center">{total} matches</span>
+      </div>
+
+      {loading ? (
+        <p className="text-center text-tertiary text-sm py-8">Loading...</p>
+      ) : matches.length === 0 ? (
+        <p className="text-center text-tertiary text-sm py-8">No matches found.</p>
+      ) : (
+        <div className="space-y-3">
+          {matches.map((m: any) => {
+            const job = m.jobs
+            const company = job?.companies
+            const resume = m.user_resumes
+            const profile = resume?.parsed_profile
+            const review = m.match_reviews?.[0]
+            const events = m.match_events || []
+            const clicked = events.some((e: any) => e.event_type === 'click')
+            const applied = events.some((e: any) => e.event_type === 'apply')
+
+            return (
+              <div key={m.id} className="card p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Resume summary */}
+                  <div>
+                    <p className="text-2xs font-mono text-tertiary mb-1">Resume</p>
+                    <p className="text-xs text-primary font-medium">{profile?.job_titles?.[0] || 'Unknown'}</p>
+                    <p className="text-2xs text-secondary">{profile?.seniority} &middot; {profile?.experience_years || '?'}y</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {profile?.skills?.slice(0, 5).map((s: string) => (
+                        <span key={s} className="text-2xs px-1 py-0.5 rounded bg-zinc-100 text-tertiary">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Job info */}
+                  <div>
+                    <p className="text-2xs font-mono text-tertiary mb-1">Job</p>
+                    <p className="text-xs text-primary font-medium">{job?.title}</p>
+                    <p className="text-2xs text-secondary">{company?.name} &middot; {company?.funding_stage}</p>
+                  </div>
+
+                  {/* Match info */}
+                  <div>
+                    <p className="text-2xs font-mono text-tertiary mb-1">Match</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs font-bold ${m.match_tier === 'strong' ? 'text-lime' : m.match_tier === 'good' ? 'text-yellow-500' : 'text-orange-400'}`}>
+                        {m.match_tier} ({m.match_score})
+                      </span>
+                      {m.user_feedback && (
+                        <span className={`text-2xs ${m.user_feedback === 'up' ? 'text-lime' : 'text-red-400'}`}>
+                          {m.user_feedback === 'up' ? 'thumbs up' : 'thumbs down'}
+                          {m.feedback_reason && ` (${m.feedback_reason})`}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-2xs text-tertiary">{m.match_reasoning}</p>
+                    <div className="flex gap-2 mt-1 text-2xs">
+                      <span className={clicked ? 'text-primary' : 'text-faint'}>{clicked ? 'Clicked' : 'No click'}</span>
+                      <span className={applied ? 'text-lime' : 'text-faint'}>{applied ? 'Applied' : 'No apply'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Admin verdict */}
+                <div className="mt-3 pt-3 border-t border-zinc-100 flex items-center gap-2">
+                  <span className="text-2xs text-tertiary mr-2">Verdict:</span>
+                  {['good', 'bad', 'borderline'].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => submitReview(m.id, v)}
+                      className={`px-2 py-1 text-2xs rounded border transition-colors ${
+                        review?.verdict === v
+                          ? v === 'good' ? 'bg-lime/20 border-lime/30 text-lime' : v === 'bad' ? 'bg-red-400/20 border-red-400/30 text-red-400' : 'bg-yellow-400/20 border-yellow-400/30 text-yellow-600'
+                          : 'border-zinc-200 text-tertiary hover:text-primary hover:border-zinc-400'
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                  <input
+                    type="text"
+                    placeholder="Notes..."
+                    value={reviewNotes[m.id] || review?.notes || ''}
+                    onChange={e => setReviewNotes(n => ({ ...n, [m.id]: e.target.value }))}
+                    className="flex-1 px-2 py-1 text-2xs rounded border border-zinc-200 focus:outline-none focus:border-zinc-400"
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
       )}
     </div>
   )

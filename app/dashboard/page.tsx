@@ -1,0 +1,408 @@
+'use client'
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { useAuth } from '@/components/auth-provider'
+import ResumeUpload from '@/components/resume-upload'
+import MatchBadge from '@/components/match-badge'
+import MatchFeedback from '@/components/match-feedback'
+import Link from 'next/link'
+import {
+  FileText, RefreshCw, Loader2, ChevronDown, ChevronUp,
+  ExternalLink, Briefcase, TrendingUp, Target,
+} from 'lucide-react'
+
+export default function DashboardPage() {
+  const { user, loading: authLoading, signInWithGoogle } = useAuth()
+  const [status, setStatus] = useState<any>(null)
+  const [matches, setMatches] = useState<any[]>([])
+  const [skillsGap, setSkillsGap] = useState<any>(null)
+  const [profile, setProfile] = useState<any>(null)
+  const [polling, setPolling] = useState(false)
+  const [showUpload, setShowUpload] = useState(false)
+  const clickedRef = useRef(new Set<string>())
+
+  // Poll status
+  const fetchStatus = useCallback(async () => {
+    const res = await fetch('/api/resume/status')
+    const data = await res.json()
+    setStatus(data)
+    return data
+  }, [])
+
+  // Fetch matches + skills gap
+  const fetchResults = useCallback(async () => {
+    const [matchRes, gapRes, profileRes] = await Promise.all([
+      fetch('/api/resume/matches'),
+      fetch('/api/resume/skills-gap'),
+      fetch('/api/resume/profile'),
+    ])
+    const matchData = await matchRes.json()
+    const gapData = await gapRes.json()
+    const profileData = await profileRes.json()
+    setMatches(matchData.matches || [])
+    setSkillsGap(gapData)
+    setProfile(profileData.parsed_profile || null)
+  }, [])
+
+  // Poll while processing
+  useEffect(() => {
+    if (!user || authLoading) return
+    fetchStatus().then(data => {
+      if (data.has_resume && data.processing_status === 'completed') {
+        fetchResults()
+      }
+    })
+  }, [user, authLoading, fetchStatus, fetchResults])
+
+  useEffect(() => {
+    if (!status?.has_resume) return
+    const isProcessing = ['pending', 'parsing', 'matching'].includes(status.processing_status)
+    if (!isProcessing) return
+
+    setPolling(true)
+    const interval = setInterval(async () => {
+      const data = await fetchStatus()
+      if (data.processing_status === 'completed') {
+        setPolling(false)
+        clearInterval(interval)
+        fetchResults()
+      } else if (data.processing_status === 'failed') {
+        setPolling(false)
+        clearInterval(interval)
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  }, [status?.has_resume, status?.processing_status, fetchStatus, fetchResults])
+
+  // Track match click
+  const trackClick = useCallback((matchId: string) => {
+    if (clickedRef.current.has(matchId)) return
+    clickedRef.current.add(matchId)
+    fetch('/api/resume/matches/event', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ match_id: matchId, event_type: 'click' }),
+    }).catch(() => {})
+  }, [])
+
+  const handleUploadComplete = useCallback(() => {
+    setShowUpload(false)
+    setMatches([])
+    setSkillsGap(null)
+    fetchStatus()
+  }, [fetchStatus])
+
+  // Auth gate
+  if (authLoading) return <Loading />
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <h1 className="text-2xl font-bold text-primary mb-3">Your Dashboard</h1>
+        <p className="text-secondary mb-6">Sign in to upload your resume and get personalized job matches.</p>
+        <button onClick={signInWithGoogle} className="px-6 py-3 bg-lime text-black font-bold rounded-lg hover:bg-lime-dark transition-colors">
+          Sign in with Google
+        </button>
+      </div>
+    )
+  }
+
+  // No resume yet
+  if (status && !status.has_resume && !showUpload) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16">
+        <h1 className="text-2xl font-bold text-primary mb-2">Your Dashboard</h1>
+        <p className="text-secondary mb-8">Upload your resume and we&apos;ll match you with the best AI roles.</p>
+        <ResumeUpload onUploadComplete={handleUploadComplete} />
+        <HowItWorks />
+      </div>
+    )
+  }
+
+  const isProcessing = status && ['pending', 'parsing', 'matching'].includes(status.processing_status)
+  const isFailed = status?.processing_status === 'failed'
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-xl font-bold text-primary">Your Dashboard</h1>
+          {status?.file_name && (
+            <p className="text-2xs font-mono text-tertiary mt-0.5 flex items-center gap-1.5">
+              <FileText className="w-3 h-3" />
+              {status.file_name} &middot; uploaded {new Date(status.uploaded_at).toLocaleDateString()}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => setShowUpload(!showUpload)}
+          className="text-xs font-medium text-secondary hover:text-primary flex items-center gap-1 px-3 py-1.5 rounded border border-zinc-200 hover:border-zinc-400 transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" /> Re-upload
+        </button>
+      </div>
+
+      {/* Re-upload */}
+      {showUpload && (
+        <div className="mb-6">
+          <ResumeUpload onUploadComplete={handleUploadComplete} />
+        </div>
+      )}
+
+      {/* Processing */}
+      {isProcessing && (
+        <div className="card p-8 text-center mb-6">
+          <Loader2 className="w-10 h-10 text-lime animate-spin mx-auto mb-3" />
+          <p className="text-primary font-semibold mb-1">
+            {status.processing_status === 'pending' && 'Preparing your resume...'}
+            {status.processing_status === 'parsing' && 'Analyzing your resume with AI...'}
+            {status.processing_status === 'matching' && 'Matching against jobs...'}
+          </p>
+          <p className="text-tertiary text-sm">This usually takes 30-60 seconds</p>
+        </div>
+      )}
+
+      {/* Failed */}
+      {isFailed && (
+        <div className="card p-6 border-red-400/30 mb-6">
+          <p className="text-red-400 font-semibold mb-1">Processing failed</p>
+          <p className="text-tertiary text-sm">{status.error_message || 'Unknown error'}</p>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="mt-3 text-sm text-lime hover:underline"
+          >
+            Try uploading again
+          </button>
+        </div>
+      )}
+
+      {/* Results */}
+      {!isProcessing && !isFailed && status?.processing_status === 'completed' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Profile + Matches */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Profile Card */}
+            {profile && <ProfileCard profile={profile} />}
+
+            {/* Matches */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-lime" />
+                <h2 className="text-sm font-semibold text-primary">Your Top Matches</h2>
+                <span className="text-2xs font-mono text-tertiary">({matches.length} jobs)</span>
+              </div>
+
+              {matches.length === 0 ? (
+                <div className="card p-6 text-center text-tertiary text-sm">
+                  No matches found. Try uploading a different resume.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {matches.map((m: any) => (
+                    <MatchCard key={m.id || m.jobs?.id} match={m} onTrackClick={trackClick} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right: Skills Gap */}
+          <div className="space-y-6">
+            {skillsGap && <SkillsGapPanel data={skillsGap} />}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Loading() {
+  return <div className="max-w-5xl mx-auto px-6 py-20 text-center text-tertiary text-sm">Loading...</div>
+}
+
+function HowItWorks() {
+  return (
+    <div className="mt-12 grid grid-cols-3 gap-4">
+      {[
+        { step: '1', title: 'Upload', desc: 'Drop your resume (PDF, DOCX, or MD)' },
+        { step: '2', title: 'AI Matches', desc: 'We match you to the best AI roles' },
+        { step: '3', title: 'Skills Gap', desc: 'See what to learn for your targets' },
+      ].map(s => (
+        <div key={s.step} className="text-center">
+          <div className="w-8 h-8 rounded-full bg-lime/20 text-lime font-bold text-sm flex items-center justify-center mx-auto mb-2">
+            {s.step}
+          </div>
+          <p className="text-sm font-semibold text-primary">{s.title}</p>
+          <p className="text-2xs text-tertiary mt-1">{s.desc}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function ProfileCard({ profile }: { profile: any }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="card p-4">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <Briefcase className="w-4 h-4 text-lime" />
+          <h2 className="text-sm font-semibold text-primary">Your Profile</h2>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4 text-tertiary" /> : <ChevronDown className="w-4 h-4 text-tertiary" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-3 text-sm">
+          <div>
+            <p className="text-2xs font-mono text-tertiary mb-1">Summary</p>
+            <p className="text-secondary">{profile.summary}</p>
+          </div>
+          <div>
+            <p className="text-2xs font-mono text-tertiary mb-1">Skills</p>
+            <div className="flex flex-wrap gap-1">
+              {profile.skills?.map((s: string) => (
+                <span key={s} className="text-2xs px-2 py-0.5 rounded bg-lime/10 text-lime border border-lime/20">{s}</span>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-2xs font-mono text-tertiary">Seniority</p>
+              <p className="text-primary font-medium capitalize">{profile.seniority}</p>
+            </div>
+            <div>
+              <p className="text-2xs font-mono text-tertiary">Experience</p>
+              <p className="text-primary font-medium">{profile.experience_years || '?'} years</p>
+            </div>
+            <div>
+              <p className="text-2xs font-mono text-tertiary">Location</p>
+              <p className="text-primary font-medium">{profile.location || 'Not specified'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: string) => void }) {
+  const job = match.jobs
+  const company = job?.companies
+
+  const salary = job?.salary_annual_min || job?.salary_annual_max
+    ? `$${Math.round((job.salary_annual_min || 0) / 1000)}K-$${Math.round((job.salary_annual_max || 0) / 1000)}K`
+    : null
+
+  return (
+    <div className="card card-hover p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Link
+              href={`/jobs/${job?.id}`}
+              onClick={() => onTrackClick(match.id)}
+              className="text-sm font-semibold text-primary hover:text-lime-dark transition-colors truncate"
+            >
+              {job?.title || 'Unknown'}
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 text-2xs text-tertiary mb-2">
+            <span className="font-medium text-secondary">{company?.name || 'Unknown'}</span>
+            {company?.funding_stage && company.funding_stage !== 'Unknown' && (
+              <span className="font-mono text-lime-dark">{company.funding_stage}</span>
+            )}
+            {job?.location && <span>{job.location}</span>}
+            {salary && <span className="font-mono font-semibold text-primary">{salary}</span>}
+          </div>
+          <p className="text-2xs text-tertiary line-clamp-2">{match.match_reasoning}</p>
+
+          {/* Skills */}
+          <div className="flex flex-wrap gap-1 mt-2">
+            {(match.skills_matched as string[])?.slice(0, 5).map((s: string) => (
+              <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-lime/10 text-lime border border-lime/20">{s}</span>
+            ))}
+            {(match.skills_missing as string[])?.slice(0, 3).map((s: string) => (
+              <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20">{s}</span>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+          <MatchBadge tier={match.match_tier} score={match.match_score} />
+          <MatchFeedback matchId={match.id} initialFeedback={match.user_feedback} />
+          {job?.apply_url && (
+            <a
+              href={job.apply_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                fetch('/api/resume/matches/event', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ match_id: match.id, event_type: 'apply' }),
+                }).catch(() => {})
+              }}
+              className="text-2xs font-medium text-lime hover:underline flex items-center gap-1"
+            >
+              Apply <ExternalLink className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SkillsGapPanel({ data }: { data: any }) {
+  return (
+    <div className="space-y-4">
+      {/* Strengths */}
+      {data.strengths?.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <TrendingUp className="w-4 h-4 text-lime" />
+            <h3 className="text-sm font-semibold text-primary">Your Strengths</h3>
+          </div>
+          <div className="space-y-2">
+            {data.strengths.slice(0, 8).map((s: any) => (
+              <div key={s.skill} className="flex items-center gap-2">
+                <span className="text-2xs text-secondary w-24 truncate">{s.skill}</span>
+                <div className="flex-1 h-1.5 bg-surface-raised rounded-full overflow-hidden">
+                  <div className="h-full bg-lime rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                </div>
+                <span className="text-2xs font-mono text-tertiary w-8 text-right">{s.demand_pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Gaps */}
+      {data.gaps?.length > 0 && (
+        <div className="card p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Target className="w-4 h-4 text-orange-400" />
+            <h3 className="text-sm font-semibold text-primary">Skills to Learn</h3>
+          </div>
+          <div className="space-y-2">
+            {data.gaps.slice(0, 8).map((s: any) => (
+              <div key={s.skill} className="flex items-center gap-2">
+                <span className="text-2xs text-secondary w-24 truncate">{s.skill}</span>
+                <div className="flex-1 h-1.5 bg-surface-raised rounded-full overflow-hidden">
+                  <div className="h-full bg-orange-400 rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                </div>
+                <span className="text-2xs font-mono text-tertiary w-8 text-right">{s.demand_pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

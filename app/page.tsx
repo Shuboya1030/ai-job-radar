@@ -29,22 +29,22 @@ export default function HomePage() {
             </h1>
 
             <p className="text-base text-zinc-400 leading-relaxed mb-8 max-w-lg">
-              Real-time skill demand from 365+ job postings. Salary benchmarks.
-              Company funding data. Everything you need to land your next AI role.
+              Upload your resume and get AI-matched to 600+ AI roles at funded startups.
+              Scored matches, skills gap analysis, and market intelligence — all in seconds.
             </p>
 
             <div className="flex gap-3">
               <Link
-                href="/jobs"
+                href="/dashboard"
                 className="px-5 py-2.5 bg-lime text-black font-semibold text-sm rounded hover:bg-lime-dark transition-colors"
               >
-                Browse jobs
+                Upload Resume
               </Link>
               <Link
-                href="/market/ai-engineer"
+                href="/jobs"
                 className="px-5 py-2.5 bg-white/5 text-white font-medium text-sm rounded border border-white/10 hover:bg-white/10 transition-colors"
               >
-                Market analysis
+                Browse Jobs
               </Link>
             </div>
           </div>
@@ -293,7 +293,7 @@ function UpcomingResumeMatch() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-lime opacity-75" />
                 <span className="relative inline-flex rounded-full h-2 w-2 bg-lime" />
               </span>
-              <span className="text-2xs font-mono text-lime tracking-widest uppercase">Coming Soon</span>
+              <span className="text-2xs font-mono text-lime tracking-widest uppercase">New Feature</span>
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight mb-3">
@@ -327,14 +327,17 @@ function UpcomingResumeMatch() {
             </div>
 
             <div className="flex items-center gap-4">
-              <span className="px-5 py-2.5 bg-zinc-800 text-zinc-500 font-semibold text-sm rounded border border-zinc-700 cursor-default select-none">
-                Available soon
-              </span>
+              <Link
+                href="/dashboard"
+                className="px-5 py-2.5 bg-lime text-black font-bold text-sm rounded hover:bg-lime-dark transition-colors"
+              >
+                Upload Resume
+              </Link>
               <span className="text-2xs font-mono text-zinc-600">Free for all users</span>
             </div>
           </div>
 
-          {/* Right: Visual — fake match preview card */}
+          {/* Right: Visual — match preview card */}
           <div className="hidden md:block w-72">
             <div className="bg-zinc-900/80 backdrop-blur border border-zinc-800 rounded-lg p-4 shadow-2xl -rotate-1 hover:rotate-0 transition-transform duration-500">
               {/* Header */}

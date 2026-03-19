@@ -93,6 +93,9 @@ export default function Nav() {
                       <p className="text-xs font-semibold text-primary truncate">{user.user_metadata?.full_name || user.email}</p>
                       <p className="text-2xs text-tertiary truncate">{user.email}</p>
                     </div>
+                    <Link href="/dashboard" className="block px-3 py-2 text-xs text-secondary hover:bg-zinc-50 font-medium" onClick={() => setDropdownOpen(false)}>
+                      Dashboard
+                    </Link>
                     <Link href="/settings" className="block px-3 py-2 text-xs text-secondary hover:bg-zinc-50" onClick={() => setDropdownOpen(false)}>
                       My Alerts
                     </Link>

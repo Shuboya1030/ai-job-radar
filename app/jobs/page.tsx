@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import SaveButton from '@/components/save-button'
 import AlertBanner from '@/components/alert-banner'
+import ResumeCTA from '@/components/resume-cta'
+import MatchBadge from '@/components/match-badge'
+import { useAuth } from '@/components/auth-provider'
 
 const ROLE_OPTIONS = ['AI PM', 'AI Engineer', 'Software Engineer']
 const WORK_TYPE_OPTIONS = ['Remote', 'Hybrid', 'On-site']
@@ -17,11 +20,15 @@ const FUNDING_OPTIONS = [
 ]
 
 export default function JobBoard() {
+  const { user } = useAuth()
   const [jobs, setJobs] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [offset, setOffset] = useState(0)
   const limit = 30
+  const [matchTab, setMatchTab] = useState<'all' | 'matches'>('all')
+  const [matchMap, setMatchMap] = useState<Record<string, any>>({})
+  const [matchJobs, setMatchJobs] = useState<any[]>([])
 
   const [search, setSearch] = useState('')
   const [role, setRole] = useState('')
@@ -29,6 +36,24 @@ export default function JobBoard() {
   const [industry, setIndustry] = useState('')
   const [fundingStage, setFundingStage] = useState('')
   const [sort, setSort] = useState('posted_at')
+
+  // Fetch user matches
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/resume/matches')
+      .then(r => r.json())
+      .then(data => {
+        if (data.matches) {
+          const map: Record<string, any> = {}
+          data.matches.forEach((m: any) => {
+            if (m.jobs?.id) map[m.jobs.id] = m
+          })
+          setMatchMap(map)
+          setMatchJobs(data.matches)
+        }
+      })
+      .catch(() => {})
+  }, [user])
 
   const fetchJobs = useCallback(async (reset = false) => {
     setLoading(true)
@@ -80,6 +105,9 @@ export default function JobBoard() {
       {/* Alert Banner */}
       <AlertBanner />
 
+      {/* Resume CTA for users without matches */}
+      {user && Object.keys(matchMap).length === 0 && <ResumeCTA />}
+
       {/* Header */}
       <div className="flex items-end justify-between mb-6">
         <div>
@@ -88,6 +116,23 @@ export default function JobBoard() {
             {total} active positions &middot; 4 sources &middot; updated daily
           </p>
         </div>
+        {/* Match tab toggle */}
+        {Object.keys(matchMap).length > 0 && (
+          <div className="flex items-center gap-1 bg-surface-raised rounded p-0.5">
+            <button
+              onClick={() => setMatchTab('all')}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${matchTab === 'all' ? 'bg-white shadow text-primary' : 'text-tertiary hover:text-secondary'}`}
+            >
+              All Jobs
+            </button>
+            <button
+              onClick={() => setMatchTab('matches')}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${matchTab === 'matches' ? 'bg-white shadow text-primary' : 'text-tertiary hover:text-secondary'}`}
+            >
+              My Matches ({matchJobs.length})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -116,11 +161,19 @@ export default function JobBoard() {
       </div>
 
       {/* Job Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {jobs.map(job => (
-          <JobCard key={job.id} job={job} />
-        ))}
-      </div>
+      {matchTab === 'matches' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {matchJobs.map((m: any) => (
+            <JobCard key={m.jobs?.id} job={{ ...m.jobs, company_name: m.jobs?.companies?.name, funding_stage: m.jobs?.companies?.funding_stage, funding_amount_cents: m.jobs?.companies?.funding_amount_cents }} match={m} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {jobs.map(job => (
+            <JobCard key={job.id} job={job} match={matchMap[job.id]} />
+          ))}
+        </div>
+      )}
 
       {loading && <p className="text-center text-tertiary text-sm py-12">Loading...</p>}
 
@@ -140,7 +193,7 @@ export default function JobBoard() {
   )
 }
 
-function JobCard({ job }: { job: any }) {
+function JobCard({ job, match }: { job: any; match?: any }) {
   const salary = job.salary_annual_min || job.salary_annual_max
     ? `$${Math.round((job.salary_annual_min || 0) / 1000)}K–$${Math.round((job.salary_annual_max || 0) / 1000)}K`
     : null
@@ -161,10 +214,11 @@ function JobCard({ job }: { job: any }) {
       href={`/jobs/${job.id}`}
       className="card card-hover p-4 flex flex-col group"
     >
-      {/* Company name + Hot badge + Save */}
+      {/* Company name + Hot badge + Match badge + Save */}
       <div className="flex items-center justify-between mb-1.5">
         <span className="text-xs font-semibold text-primary truncate">{job.company_name || 'Unknown'}</span>
         <div className="flex items-center gap-1">
+          {match && <MatchBadge tier={match.match_tier} size="sm" />}
           {job.company_is_hot && (
             <span className="badge bg-red-500 text-white text-2xs font-bold animate-pulse">HOT</span>
           )}

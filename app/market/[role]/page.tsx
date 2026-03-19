@@ -8,6 +8,8 @@ import DonutChart from '@/components/charts/pie-chart'
 import SalaryRangeChart from '@/components/charts/salary-chart'
 import type { MarketSnapshot } from '@/types/database'
 import AlertBanner from '@/components/alert-banner'
+import ResumeCTA from '@/components/resume-cta'
+import { useAuth } from '@/components/auth-provider'
 
 const ROLE_LABELS: Record<string, string> = {
   'ai-pm': 'AI Product Manager',
@@ -20,9 +22,11 @@ const TABS = ['Skills', 'Salary', 'Resume']
 export default function MarketDashboard() {
   const params = useParams()
   const role = params.role as string
+  const { user } = useAuth()
   const [data, setData] = useState<MarketSnapshot | null>(null)
   const [tab, setTab] = useState('Skills')
   const [loading, setLoading] = useState(true)
+  const [skillsGap, setSkillsGap] = useState<any>(null)
 
   useEffect(() => {
     fetch(`/api/market?role=${role}`)
@@ -30,6 +34,15 @@ export default function MarketDashboard() {
       .then(d => { setData(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [role])
+
+  // Fetch user skills gap
+  useEffect(() => {
+    if (!user) return
+    fetch('/api/resume/skills-gap')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.error) setSkillsGap(d) })
+      .catch(() => {})
+  }, [user])
 
   if (loading) return <div className="max-w-7xl mx-auto px-6 py-20 text-center text-tertiary text-sm">Loading...</div>
   if (!data) return (
@@ -168,6 +181,54 @@ export default function MarketDashboard() {
             <p className="text-sm font-semibold text-primary mb-1">Resume optimization for {ROLE_LABELS[role]}</p>
             <p className="text-xs text-secondary">Based on {data.total_jobs} recent job postings. Include these keywords to match what employers search for.</p>
           </div>
+
+          {/* Personalized skills gap panel */}
+          {user && skillsGap && skillsGap.strengths?.length > 0 && (
+            <div className="card p-5 border-l-4 border-l-orange-400">
+              <h3 className="text-sm font-bold text-primary mb-1">Your Profile vs. Market Demand</h3>
+              <p className="text-2xs text-tertiary mb-4">Based on your resume analysis across {skillsGap.total_matches} matched roles</p>
+
+              {skillsGap.strengths.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-2xs font-mono text-faint uppercase tracking-widest mb-2">Skills you have that are in demand</p>
+                  <div className="space-y-1.5">
+                    {skillsGap.strengths.slice(0, 6).map((s: any) => (
+                      <div key={s.skill} className="flex items-center gap-2">
+                        <span className="text-xs text-secondary w-28 truncate">{s.skill}</span>
+                        <div className="flex-1 h-1.5 bg-surface-raised rounded-full overflow-hidden">
+                          <div className="h-full bg-lime rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                        </div>
+                        <span className="text-2xs font-mono text-tertiary w-8 text-right">{s.demand_pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {skillsGap.gaps.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-2xs font-mono text-faint uppercase tracking-widest mb-2">Skills gap to close</p>
+                  <div className="space-y-1.5">
+                    {skillsGap.gaps.slice(0, 6).map((s: any) => (
+                      <div key={s.skill} className="flex items-center gap-2">
+                        <span className="text-xs text-secondary w-28 truncate">{s.skill}</span>
+                        <div className="flex-1 h-1.5 bg-surface-raised rounded-full overflow-hidden">
+                          <div className="h-full bg-orange-400 rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                        </div>
+                        <span className="text-2xs font-mono text-tertiary w-8 text-right">{s.demand_pct}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Link href="/jobs?tab=matches" className="text-xs font-medium text-lime hover:underline">
+                See matching jobs for this role &rarr;
+              </Link>
+            </div>
+          )}
+
+          {user && !skillsGap && <ResumeCTA />}
 
           <KeywordBlock title="Must-Have" subtitle=">30% of JDs mention these" keywords={data.must_have_keywords} accent />
           <KeywordBlock title="Nice-to-Have" subtitle="15–30% of JDs mention these" keywords={data.nice_to_have_keywords} />

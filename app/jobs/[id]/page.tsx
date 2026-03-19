@@ -7,12 +7,17 @@ import {
   ChevronRight, MapPin, DollarSign, Users, Calendar,
   ExternalLink, Briefcase, Globe, TrendingUp,
 } from 'lucide-react'
+import { useAuth } from '@/components/auth-provider'
+import MatchBadge from '@/components/match-badge'
+import MatchFeedback from '@/components/match-feedback'
 
 export default function JobDetail() {
   const params = useParams()
   const id = params?.id as string
+  const { user } = useAuth()
   const [job, setJob] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [match, setMatch] = useState<any>(null)
 
   useEffect(() => {
     if (!id) return
@@ -21,6 +26,26 @@ export default function JobDetail() {
       .then(d => { setJob(d); setLoading(false) })
       .catch(() => setLoading(false))
   }, [id])
+
+  // Fetch match data for this job
+  useEffect(() => {
+    if (!user || !id) return
+    fetch('/api/resume/matches')
+      .then(r => r.json())
+      .then(data => {
+        const m = data.matches?.find((m: any) => m.jobs?.id === id)
+        if (m) {
+          setMatch(m)
+          // Track click event
+          fetch('/api/resume/matches/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ match_id: m.id, event_type: 'click' }),
+          }).catch(() => {})
+        }
+      })
+      .catch(() => {})
+  }, [user, id])
 
   if (loading) return <div className="max-w-5xl mx-auto px-6 py-20 text-center text-ink-muted">Loading...</div>
   if (!job) return <div className="max-w-5xl mx-auto px-6 py-20 text-center text-ink-muted">Job not found.</div>
@@ -70,10 +95,45 @@ export default function JobDetail() {
               href={job.apply_url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={() => {
+                if (match) {
+                  fetch('/api/resume/matches/event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ match_id: match.id, event_type: 'apply' }),
+                  }).catch(() => {})
+                }
+              }}
               className="flex items-center justify-center gap-2 w-full px-6 py-4 bg-lime text-black text-base font-bold rounded-lg hover:bg-lime-dark transition-colors shadow-[0_0_20px_rgba(191,255,0,0.3)]"
             >
               Apply Now <ExternalLink className="w-4 h-4" />
             </a>
+          )}
+
+          {/* Match Panel */}
+          {match && (
+            <div className="bg-surface-raised rounded-xl p-5 border border-lime/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-primary">Your Match</span>
+                  <MatchBadge tier={match.match_tier} score={match.match_score} size="md" />
+                </div>
+                <MatchFeedback matchId={match.id} initialFeedback={match.user_feedback} />
+              </div>
+              <p className="text-sm text-secondary mb-3">{match.match_reasoning}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(match.skills_matched as string[])?.map((s: string) => (
+                  <span key={s} className="text-2xs px-2 py-0.5 rounded bg-lime/10 text-lime border border-lime/20">
+                    {s}
+                  </span>
+                ))}
+                {(match.skills_missing as string[])?.map((s: string) => (
+                  <span key={s} className="text-2xs px-2 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20">
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* Skills Tags */}

@@ -23,28 +23,42 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight leading-[1.1] mb-4">
-              AI startup jobs,
+              Find AI startups
               <br />
-              <span className="text-lime">decoded.</span>
+              <span className="text-lime">that match you.</span>
             </h1>
 
-            <p className="text-base text-zinc-400 leading-relaxed mb-8 max-w-lg">
-              Upload your resume and get AI-matched to 600+ AI roles at funded startups.
-              Scored matches, skills gap analysis, and market intelligence — all in seconds.
+            <p className="text-base text-zinc-400 leading-relaxed mb-10 max-w-lg">
+              Drop your resume — our AI scans 600+ roles at funded startups and finds
+              the ones you&apos;re most qualified for. Ranked, scored, and explained in seconds.
             </p>
 
+            {/* Primary CTA — large and prominent */}
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2.5 px-8 py-4 bg-lime text-black font-bold text-base rounded-lg hover:bg-lime-dark transition-all hover:shadow-[0_0_30px_rgba(191,255,0,0.3)] mb-5"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Upload Resume &mdash; Find Your Best Matches
+            </Link>
+
+            <p className="text-2xs text-zinc-500 mb-6">PDF, DOCX, or Markdown &middot; Free &middot; Takes 30 seconds</p>
+
+            {/* Secondary CTAs */}
             <div className="flex gap-3">
               <Link
-                href="/dashboard"
-                className="px-5 py-2.5 bg-lime text-black font-semibold text-sm rounded hover:bg-lime-dark transition-colors"
+                href="/jobs"
+                className="px-4 py-2 bg-white/5 text-zinc-300 font-medium text-sm rounded border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
               >
-                Upload Resume
+                Browse all jobs
               </Link>
               <Link
-                href="/jobs"
-                className="px-5 py-2.5 bg-white/5 text-white font-medium text-sm rounded border border-white/10 hover:bg-white/10 transition-colors"
+                href="/market/ai-engineer"
+                className="px-4 py-2 bg-white/5 text-zinc-300 font-medium text-sm rounded border border-white/10 hover:bg-white/10 hover:text-white transition-colors"
               >
-                Browse Jobs
+                Market analysis
               </Link>
             </div>
           </div>

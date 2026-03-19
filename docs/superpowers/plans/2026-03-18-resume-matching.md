@@ -36,6 +36,15 @@ components/skills-gap-panel.tsx                  — Skills gap visualization
 components/resume-cta.tsx                        — CTA banner for pages without resume
 ```
 
+### New Files (Metrics & Quality — Chunk 7)
+```
+database/migration_match_metrics.sql            — DDL for match_events, match_reviews, feedback columns
+app/api/resume/matches/event/route.ts           — POST: track click/apply events
+app/api/resume/matches/feedback/route.ts        — PUT: thumbs up/down with reason
+app/api/admin/match-reviews/route.ts            — GET/POST: admin match review panel
+components/match-feedback.tsx                    — Thumbs up/down component
+```
+
 ### Modified Files
 ```
 package.json                                    — Add @anthropic-ai/sdk, pdf-parse, mammoth
@@ -43,9 +52,12 @@ package.json                                    — Add @anthropic-ai/sdk, pdf-p
 components/nav.tsx                              — Add Dashboard link when user has resume
 app/page.tsx                                    — Add upload CTA to hero section
 app/jobs/page.tsx                               — Add "My Matches" tab + match badges
-app/jobs/[id]/page.tsx                          — Add match panel for authenticated users
+app/jobs/[id]/page.tsx                          — Add match panel + click/apply tracking
 app/market/[role]/page.tsx                      — Add personalized skills gap panel
 app/api/auth/callback/route.ts                  — Support ?next= redirect to /dashboard
+app/admin/page.tsx                              — Add Match Quality Review section
+app/dashboard/page.tsx                          — Add thumbs up/down + click tracking
+lib/resume-ai.ts                                — Add weighted rubric + few-shot calibration
 ```
 
 ---
@@ -1459,6 +1471,475 @@ git commit -m "feat: finalize resume matching feature configuration"
 
 ---
 
+## Chunk 7: Match Quality Metrics & Admin Review
+
+### Task 18: Database Migration for Metrics
+
+**Files:**
+- Create: `database/migration_match_metrics.sql`
+
+- [ ] **Step 1: Write the metrics migration**
+
+Create `database/migration_match_metrics.sql`:
+
+```sql
+-- Match Quality Metrics Migration
+-- Prerequisite: user_job_matches table must exist (from resume matching migration)
+
+-- 1. Add user feedback columns to matches
+ALTER TABLE user_job_matches
+    ADD COLUMN IF NOT EXISTS user_feedback TEXT CHECK (user_feedback IN ('up', 'down')),
+    ADD COLUMN IF NOT EXISTS feedback_reason TEXT,
+    ADD COLUMN IF NOT EXISTS dimension_scores JSONB;
+    -- dimension_scores: {domain: 25, skills: 22, experience: 20, role_type: 12}
+
+-- 2. Match interaction events (click + apply tracking)
+CREATE TABLE IF NOT EXISTS match_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES user_job_matches(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL CHECK (event_type IN ('click', 'apply')),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE match_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users insert own events" ON match_events
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users read own events" ON match_events
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE INDEX idx_match_events_match ON match_events(match_id);
+CREATE INDEX idx_match_events_user ON match_events(user_id);
+
+-- 3. Admin match reviews
+CREATE TABLE IF NOT EXISTS match_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES user_job_matches(id) ON DELETE CASCADE,
+    verdict TEXT NOT NULL CHECK (verdict IN ('good', 'bad', 'borderline')),
+    notes TEXT,
+    reviewed_at TIMESTAMPTZ DEFAULT now()
+);
+-- No RLS — admin only (accessed via service role from /admin routes)
+
+CREATE INDEX idx_match_reviews_match ON match_reviews(match_id);
+```
+
+- [ ] **Step 2: Run migration in Supabase**
+
+Go to Supabase Dashboard → SQL Editor → paste and run.
+Verify: `match_events` and `match_reviews` tables appear. `user_job_matches` has new columns.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add database/migration_match_metrics.sql
+git commit -m "feat: add match metrics database migration (events, reviews, feedback)"
+```
+
+### Task 19: Match Event Tracking API
+
+**Files:**
+- Create: `app/api/resume/matches/event/route.ts`
+- Create: `app/api/resume/matches/feedback/route.ts`
+
+- [ ] **Step 1: Create event tracking route**
+
+Create `app/api/resume/matches/event/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+
+async function getUser() {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+}
+
+export async function POST(req: NextRequest) {
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { match_id, event_type } = await req.json()
+  if (!match_id || !['click', 'apply'].includes(event_type)) {
+    return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
+  }
+
+  const db = createSupabaseServerClient()
+  const { error } = await db.from('match_events').insert({
+    match_id,
+    user_id: user.id,
+    event_type,
+  })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
+```
+
+- [ ] **Step 2: Create feedback route**
+
+Create `app/api/resume/matches/feedback/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+
+async function getUser() {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { get(name: string) { return cookieStore.get(name)?.value }, set() {}, remove() {} } }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+}
+
+export async function PUT(req: NextRequest) {
+  const user = await getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { match_id, feedback, reason } = await req.json()
+  if (!match_id || !['up', 'down'].includes(feedback)) {
+    return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
+  }
+
+  const db = createSupabaseServerClient()
+
+  // Verify the match belongs to this user
+  const { data: match } = await db
+    .from('user_job_matches')
+    .select('id')
+    .eq('id', match_id)
+    .eq('user_id', user.id)
+    .single()
+
+  if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })
+
+  const { error } = await db
+    .from('user_job_matches')
+    .update({
+      user_feedback: feedback,
+      feedback_reason: reason || null,
+    })
+    .eq('id', match_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/api/resume/matches/event/ app/api/resume/matches/feedback/
+git commit -m "feat: add match event tracking and user feedback routes"
+```
+
+### Task 20: Thumbs Up/Down UI Component
+
+**Files:**
+- Create: `components/match-feedback.tsx`
+
+- [ ] **Step 1: Create the feedback component**
+
+Create `components/match-feedback.tsx`:
+
+```typescript
+'use client'
+
+import { useState } from 'react'
+import { ThumbsUp, ThumbsDown } from 'lucide-react'
+
+interface MatchFeedbackProps {
+  matchId: string
+  initialFeedback?: 'up' | 'down' | null
+}
+
+const reasons = [
+  'Wrong seniority',
+  'Wrong domain',
+  'Missing key skills',
+  'Not interested in company',
+  'Other',
+]
+
+export default function MatchFeedback({ matchId, initialFeedback }: MatchFeedbackProps) {
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(initialFeedback || null)
+  const [showReasons, setShowReasons] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  async function submitFeedback(value: 'up' | 'down', reason?: string) {
+    setSaving(true)
+    try {
+      await fetch('/api/resume/matches/feedback', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ match_id: matchId, feedback: value, reason }),
+      })
+      setFeedback(value)
+      setShowReasons(false)
+    } catch {
+      // silently fail — non-critical
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleThumbDown() {
+    setShowReasons(true)
+  }
+
+  return (
+    <div className="inline-flex flex-col gap-2">
+      <div className="inline-flex items-center gap-1">
+        <button
+          onClick={() => submitFeedback('up')}
+          disabled={saving}
+          className={`p-1.5 rounded transition-colors ${
+            feedback === 'up'
+              ? 'bg-lime/20 text-lime'
+              : 'text-tertiary hover:text-lime hover:bg-lime/10'
+          }`}
+          title="Good match"
+        >
+          <ThumbsUp className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={handleThumbDown}
+          disabled={saving}
+          className={`p-1.5 rounded transition-colors ${
+            feedback === 'down'
+              ? 'bg-red-400/20 text-red-400'
+              : 'text-tertiary hover:text-red-400 hover:bg-red-400/10'
+          }`}
+          title="Bad match"
+        >
+          <ThumbsDown className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {showReasons && (
+        <div className="flex flex-wrap gap-1">
+          {reasons.map((r) => (
+            <button
+              key={r}
+              onClick={() => submitFeedback('down', r)}
+              className="text-2xs px-2 py-1 rounded bg-surface-raised border border-faint/20 text-tertiary hover:text-primary hover:border-faint transition-colors"
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+```
+
+- [ ] **Step 2: Integrate into match cards**
+
+In `app/dashboard/page.tsx` and `app/jobs/[id]/page.tsx`: add `<MatchFeedback matchId={match.id} />` next to each match display. The thumbs-up/down buttons should appear to the right of the match badge.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add components/match-feedback.tsx
+git commit -m "feat: add thumbs up/down feedback component for matches"
+```
+
+### Task 21: Click & Apply Event Tracking in Frontend
+
+**Files:**
+- Modify: `app/dashboard/page.tsx`
+- Modify: `app/jobs/[id]/page.tsx`
+
+- [ ] **Step 1: Track click events**
+
+When a user clicks a matched job card (on dashboard or job board "My Matches" tab), fire:
+
+```typescript
+fetch('/api/resume/matches/event', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ match_id: matchId, event_type: 'click' }),
+})
+```
+
+This should fire once per job view (not on every re-render). Use a Set to track which match_ids have been logged in the current session.
+
+- [ ] **Step 2: Track apply events**
+
+When a user clicks the "Apply" button on a job detail page that has a match, fire:
+
+```typescript
+fetch('/api/resume/matches/event', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ match_id: matchId, event_type: 'apply' }),
+})
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/dashboard/page.tsx app/jobs/[id]/page.tsx
+git commit -m "feat: track click and apply events on matched jobs"
+```
+
+### Task 22: Admin Review Panel
+
+**Files:**
+- Modify: `app/admin/page.tsx`
+- Create: `app/api/admin/match-reviews/route.ts`
+
+- [ ] **Step 1: Create admin API routes**
+
+Create `app/api/admin/match-reviews/route.ts`:
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { createSupabaseServerClient } from '@/lib/supabase-server'
+
+// GET: list all matches with resume + job + events for admin review
+export async function GET(req: NextRequest) {
+  const password = req.headers.get('x-admin-password')
+  if (password !== process.env.ADMIN_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const db = createSupabaseServerClient()
+  const url = new URL(req.url)
+  const tier = url.searchParams.get('tier')
+  const feedback = url.searchParams.get('feedback')
+  const reviewed = url.searchParams.get('reviewed')
+  const limit = parseInt(url.searchParams.get('limit') || '50')
+  const offset = parseInt(url.searchParams.get('offset') || '0')
+
+  let query = db
+    .from('user_job_matches')
+    .select(`
+      id, match_score, match_tier, match_reasoning, skills_matched, skills_missing,
+      dimension_scores, user_feedback, feedback_reason,
+      user_resumes!inner(parsed_profile, file_name),
+      jobs!inner(title, description, location, role_category,
+        companies(name, funding_stage)),
+      match_reviews(verdict, notes, reviewed_at),
+      match_events(event_type, created_at)
+    `, { count: 'exact' })
+    .order('match_score', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  if (tier) query = query.eq('match_tier', tier)
+  if (feedback) query = query.eq('user_feedback', feedback)
+  if (reviewed === 'false') query = query.is('match_reviews', null)
+
+  const { data, count, error } = await query
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ matches: data, total: count })
+}
+
+// POST: submit admin review
+export async function POST(req: NextRequest) {
+  const password = req.headers.get('x-admin-password')
+  if (password !== process.env.ADMIN_PASSWORD) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { match_id, verdict, notes } = await req.json()
+  if (!match_id || !['good', 'bad', 'borderline'].includes(verdict)) {
+    return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
+  }
+
+  const db = createSupabaseServerClient()
+  const { error } = await db.from('match_reviews').upsert({
+    match_id,
+    verdict,
+    notes: notes || null,
+    reviewed_at: new Date().toISOString(),
+  }, { onConflict: 'match_id' })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
+```
+
+Note: the `match_reviews` table needs a unique constraint on `match_id` for upsert:
+```sql
+ALTER TABLE match_reviews ADD CONSTRAINT match_reviews_match_id_unique UNIQUE (match_id);
+```
+
+- [ ] **Step 2: Add Match Quality section to admin dashboard**
+
+In `app/admin/page.tsx`, add a new section "Match Quality Review" below the existing admin panels. This section:
+
+- Shows a table/list of matches with: resume summary, job title + company, AI score/tier/reasoning, user behavior (clicked? applied?), user feedback (thumbs up/down), and admin verdict buttons (Good/Bad/Borderline + notes)
+- Filterable by: tier, user feedback, reviewed/unreviewed
+- Each row has 3 verdict buttons + a text input for notes
+- Shows system health stats at the top: avg matches/user, tier distribution, thumbs-up rate on Strong matches
+
+Use `frontend-design` skill for the visual implementation. The admin page already uses password authentication.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add app/api/admin/match-reviews/ app/admin/page.tsx database/migration_match_metrics.sql
+git commit -m "feat: add admin match review panel with quality metrics"
+```
+
+### Task 23: Update Claude Matching Prompt with Weighted Rubric
+
+**Files:**
+- Modify: `lib/resume-ai.ts`
+
+- [ ] **Step 1: Update the matchJobsBatch prompt**
+
+In `lib/resume-ai.ts`, update the `matchJobsBatch` function prompt to:
+
+1. Include the explicit 30/30/25/15 weighted rubric
+2. Require `dimension_scores` in the output
+3. Include few-shot examples from `match_reviews` (if any exist)
+
+The prompt should now say:
+```
+Score each candidate-job pair across 4 weighted dimensions:
+- Domain relevance (0-30 pts): How well does the candidate's industry/domain background match?
+- Skills overlap (0-30 pts): What % of required hard skills does the candidate have?
+- Experience level fit (0-25 pts): Does seniority + years of experience align?
+- Role type fit (0-15 pts): Engineering vs research vs PM alignment?
+
+Total = sum of 4 dimensions (0-100).
+
+Output must include "dimension_scores": {"domain": X, "skills": X, "experience": X, "role_type": X}
+```
+
+Also: before calling Claude, query `match_reviews` for up to 10 "good" and 10 "bad" reviewed examples. If any exist, include them in the prompt as calibration:
+```
+Here are human-reviewed examples to calibrate your scoring:
+GOOD MATCH (verified by reviewer): ...
+BAD MATCH (verified by reviewer): ...
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add lib/resume-ai.ts
+git commit -m "feat: add weighted rubric and few-shot calibration to matching prompt"
+```
+
+---
+
 ## Task Dependency Graph
 
 ```
@@ -1479,8 +1960,20 @@ Task 10 (Nav Update)    Task 11-14 (Page Integrations)
 Task 15 (Auth Callback) ──→ Task 16 (Daily Match)
                               ↓
                         Task 17 (Final Verification)
+                              ↓
+                        Task 18 (Metrics DB Migration)
+                              ↓
+                        Task 19 (Event + Feedback APIs)
+                              ↓
+                   Task 20 (Thumbs UI) + Task 21 (Click/Apply Tracking)
+                              ↓
+                        Task 22 (Admin Review Panel)
+                              ↓
+                        Task 23 (Weighted Rubric in Prompt)
 ```
 
-**Parallelizable:** Tasks 3+4 can run in parallel. Tasks 11-14 can run in parallel. Task 15 is independent.
+**Parallelizable:** Tasks 3+4 can run in parallel. Tasks 11-14 can run in parallel. Tasks 20+21 can run in parallel. Task 15 is independent.
 
-**Critical path:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 9 → 17
+**Critical path:** 1 → 2 → 3 → 4 → 5 → 6 → 7 → 9 → 17 → 18 → 19 → 22 → 23
+
+**Total: 23 tasks across 7 chunks. Estimated effort: 3-4 days.**

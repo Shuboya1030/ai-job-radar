@@ -63,20 +63,33 @@ These refine future match scoring but are not required.
 | **Stretch** | 40-59 | Orange | Possible with some upskilling |
 | Below 40 | — | Not shown | Too far from match |
 
+### Matching Rubric (Weighted Dimensions)
+
+The AI scores each resume-job pair across 4 weighted dimensions:
+
+| Dimension | Weight | What it measures | Example |
+|-----------|--------|-----------------|---------|
+| **Domain relevance** | 30% | Industry/domain background match. Healthcare AI researcher → healthcare AI role = high. Fintech engineer → healthcare AI = low. | 0-30 points |
+| **Skills overlap** | 30% | % of required hard skills (languages, frameworks, tools, methods) the candidate has. | 0-30 points |
+| **Experience level fit** | 25% | Seniority + years alignment. Junior applying to Staff role = large penalty. Senior applying to Senior = full score. | 0-25 points |
+| **Role type fit** | 15% | Engineering vs. research vs. PM vs. data science alignment. | 0-15 points |
+
+**Total: 0-100 points**
+
+These weights encode the principle that domain expertise (hard to acquire, takes years) and skills (technical foundation) matter most, followed by seniority alignment and role category.
+
+The Claude prompt must include these weights explicitly so scoring is consistent. The prompt also includes few-shot examples from admin-reviewed matches (see Quality Metrics below) to calibrate the AI's judgment over time.
+
 ### AI Matching Process
 
-For each job, Claude evaluates:
-1. **Skills overlap** — hard skills (languages, frameworks, tools) vs. job requirements
-2. **Experience level fit** — years of experience, seniority alignment
-3. **Domain relevance** — industry/domain background vs. job context
-4. **Role type fit** — engineering vs. research vs. PM alignment
+For each job, Claude evaluates across the 4 weighted dimensions above and produces:
 
-Output per job:
-- `match_score` (0-100)
-- `match_tier` (strong/good/stretch)
-- `match_reasoning` (1-2 sentence human-readable explanation)
+- `match_score` (0-100, sum of weighted dimension scores)
+- `match_tier` (strong/good/stretch, derived from score range)
+- `match_reasoning` (1-2 sentence human-readable explanation referencing which dimensions scored high/low)
 - `skills_matched` (array of matched skills)
 - `skills_missing` (array of missing skills)
+- `dimension_scores` (breakdown: `{domain: 25, skills: 22, experience: 20, role_type: 12}`)
 
 ### Skills Gap Analysis
 
@@ -84,6 +97,127 @@ Aggregated across all matched jobs:
 - Skills the user has that are in high demand (with % of roles requiring them)
 - Skills the user is missing that would unlock more matches (with % of roles requiring them)
 - Suggested learning priorities (ranked by impact on match count)
+
+## Match Quality & Metrics
+
+### User Behavior Tracking
+
+Track two key actions for every matched job displayed to a user:
+
+| Event | When it fires | Stored as |
+|-------|--------------|-----------|
+| **Job click** | User clicks into the job detail page from a match card | `match_events.event_type = 'click'` |
+| **Apply click** | User clicks the "Apply" button on a matched job | `match_events.event_type = 'apply'` |
+
+These events are tied to the specific `user_job_match` row so we can compute:
+- **Click-through rate by tier**: % of Strong/Good/Stretch matches that get clicked
+- **Apply rate by tier**: % of Strong/Good/Stretch matches where user clicks Apply
+
+Healthy signals: Strong matches should have higher CTR and apply rate than Stretch. If not, the scoring is miscalibrated.
+
+### User Feedback (Thumbs Up/Down)
+
+Each match card displays a small thumbs-up / thumbs-down button. When clicked:
+- Stores `user_job_matches.user_feedback = 'up' | 'down'`
+- Optional: after thumbs-down, show a quick dropdown: "Why?" → "Wrong seniority" / "Wrong domain" / "Missing key skills" / "Not interested in company" / "Other"
+
+This provides direct quality signal per match.
+
+### System Health Metrics
+
+Monitored via admin dashboard queries:
+
+| Metric | Healthy Range | Alert if |
+|--------|--------------|----------|
+| Average matches per user | 15-50 | < 5 (bar too high) or > 150 (bar too low) |
+| Tier distribution | ~15% Strong, ~30% Good, ~55% Stretch | > 50% Strong (too generous) or < 5% Strong (too strict) |
+| Thumbs-up rate on Strong matches | > 70% | < 50% (scoring is wrong) |
+| CTR on Strong vs Stretch | Strong CTR > Stretch CTR | Stretch CTR > Strong CTR (ranking broken) |
+
+### Admin Review Panel
+
+A section in the existing `/admin` dashboard where the platform owner can manually review match quality:
+
+**For each match, the admin sees:**
+1. Resume summary (skills, experience, seniority, domain)
+2. Matched job (title, company, description, requirements)
+3. AI match score + tier + reasoning + dimension breakdown
+4. User behavior: did they click the job posting? Did they click Apply?
+5. User feedback: thumbs up/down + reason (if given)
+6. **Admin verdict**: Good Match / Bad Match / Borderline + free-text notes
+
+**Admin review table (`match_reviews`):**
+```sql
+CREATE TABLE match_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES user_job_matches(id) ON DELETE CASCADE,
+    verdict TEXT NOT NULL CHECK (verdict IN ('good', 'bad', 'borderline')),
+    notes TEXT,
+    reviewed_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+**Admin can browse all matches** (full browse mode), filtered by:
+- Tier (show me all Strong matches)
+- User feedback (show me thumbs-downed matches)
+- Unreviewed only
+- Specific user or job
+
+### Feedback Loop: Improving Matching Over Time
+
+Admin-reviewed matches feed back into the Claude matching prompt as few-shot examples:
+
+1. Periodically export reviewed matches (e.g., 20 "good" + 20 "bad" examples)
+2. Include them in the Claude prompt as calibration examples:
+   ```
+   Here are examples of matches a human reviewer rated:
+
+   GOOD MATCH (score should be 80+):
+   Resume: [summary] → Job: [title at company] → Reviewer note: "Strong domain fit, right seniority"
+
+   BAD MATCH (score should be below 40):
+   Resume: [summary] → Job: [title at company] → Reviewer note: "Wrong domain entirely, fintech person matched to biotech"
+   ```
+3. This iteratively calibrates the AI's judgment to match the platform owner's quality bar
+
+### New Database Additions for Metrics
+
+```sql
+-- User feedback on matches
+ALTER TABLE user_job_matches
+    ADD COLUMN user_feedback TEXT CHECK (user_feedback IN ('up', 'down')),
+    ADD COLUMN feedback_reason TEXT;
+
+-- Match interaction events (clicks and applies)
+CREATE TABLE match_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES user_job_matches(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL CHECK (event_type IN ('click', 'apply')),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE match_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users insert own events" ON match_events
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users read own events" ON match_events
+    FOR SELECT USING (auth.uid() = user_id);
+-- Admin reads all via service role
+
+-- Admin match reviews
+CREATE TABLE match_reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID NOT NULL REFERENCES user_job_matches(id) ON DELETE CASCADE,
+    verdict TEXT NOT NULL CHECK (verdict IN ('good', 'bad', 'borderline')),
+    notes TEXT,
+    reviewed_at TIMESTAMPTZ DEFAULT now()
+);
+-- No RLS — admin only (accessed via service role from /admin routes)
+
+CREATE INDEX idx_match_events_match ON match_events(match_id);
+CREATE INDEX idx_match_events_user ON match_events(user_id);
+CREATE INDEX idx_match_reviews_match ON match_reviews(match_id);
+```
 
 ## Technical Architecture
 

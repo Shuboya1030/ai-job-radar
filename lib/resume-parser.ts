@@ -1,6 +1,3 @@
-import { PDFParse } from 'pdf-parse'
-import mammoth from 'mammoth'
-
 const MAX_TEXT_LENGTH = 50_000 // Truncate to prevent runaway API costs
 
 export type FileType = 'pdf' | 'docx' | 'md'
@@ -18,12 +15,15 @@ export async function extractText(buffer: Buffer, fileType: FileType): Promise<s
 
   switch (fileType) {
     case 'pdf': {
+      // Dynamic import to avoid pdfjs-dist webpack conflicts with Next.js
+      const { PDFParse } = await import('pdf-parse')
       const parser = new PDFParse({ data: new Uint8Array(buffer) })
       const result = await parser.getText()
       text = result.text
       break
     }
     case 'docx': {
+      const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
       text = result.value
       break

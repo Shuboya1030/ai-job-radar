@@ -18,9 +18,8 @@ export async function GET(req: NextRequest) {
   let query = db
     .from('user_job_matches')
     .select(`
-      id, match_score, match_tier, match_reasoning, skills_matched, skills_missing,
+      id, user_id, match_score, match_tier, match_reasoning, skills_matched, skills_missing,
       dimension_scores, user_feedback, feedback_reason,
-      user_resumes!inner(parsed_profile, file_name),
       jobs!inner(title, description, location, role_category,
         companies(name, funding_stage)),
       match_reviews(verdict, notes, reviewed_at),
@@ -35,6 +34,23 @@ export async function GET(req: NextRequest) {
   const { data, count, error } = await query
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Fetch resume profiles for matched users
+  if (data?.length) {
+    const userIds = [...new Set(data.map((m: any) => m.user_id))]
+    const { data: resumes } = await db
+      .from('user_resumes')
+      .select('user_id, parsed_profile, file_name')
+      .in('user_id', userIds)
+
+    const resumeMap: Record<string, any> = {}
+    resumes?.forEach((r: any) => { resumeMap[r.user_id] = r })
+
+    data.forEach((m: any) => {
+      m.user_resumes = resumeMap[m.user_id] || null
+    })
+  }
+
   return NextResponse.json({ matches: data, total: count })
 }
 

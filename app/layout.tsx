@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Nav from '@/components/nav'
 import Footer from '@/components/footer'
+import DiscordFab from '@/components/discord-fab'
 import Analytics from '@/components/analytics'
 import { Providers } from '@/components/providers'
 
@@ -23,6 +24,7 @@ export default function RootLayout({
           <Analytics />
           <main className="flex-1">{children}</main>
           <Footer />
+          <DiscordFab />
         </Providers>
       </body>
     </html>

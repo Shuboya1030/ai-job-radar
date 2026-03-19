@@ -9,6 +9,7 @@ import SalaryRangeChart from '@/components/charts/salary-chart'
 import type { MarketSnapshot } from '@/types/database'
 import AlertBanner from '@/components/alert-banner'
 import ResumeCTA from '@/components/resume-cta'
+import LoginGate from '@/components/login-gate'
 import { useAuth } from '@/components/auth-provider'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -107,6 +108,7 @@ export default function MarketDashboard() {
       {/* Skills Tab */}
       {tab === 'Skills' && (
         <div className="space-y-8">
+          {/* Hard Skills — always visible */}
           <Section title="Hard Skills">
             <HorizontalBarChart
               data={data.hard_skills?.slice(0, 15).map(s => ({ name: s.name, value: s.count, pct: s.pct }))}
@@ -115,75 +117,83 @@ export default function MarketDashboard() {
             />
           </Section>
 
-          <Section title="Tools & Technologies">
-            <HorizontalBarChart
-              data={data.tools?.slice(0, 15).map(s => ({ name: s.name, value: s.count, pct: s.pct }))}
-              color="#BFFF00"
-              height={420}
-            />
-          </Section>
+          {/* Remaining skills — gated for non-logged-in */}
+          <LoginGate locked={!user} message="Sign in to see Tools, Soft Skills, and market breakdowns">
+            <div className="space-y-8">
+              <Section title="Tools & Technologies">
+                <HorizontalBarChart
+                  data={data.tools?.slice(0, 15).map(s => ({ name: s.name, value: s.count, pct: s.pct }))}
+                  color="#BFFF00"
+                  height={420}
+                />
+              </Section>
 
-          <Section title="Soft Skills">
-            <HorizontalBarChart
-              data={data.soft_skills?.slice(0, 10).map(s => ({ name: s.name, value: s.count, pct: s.pct }))}
-              color="#71717A"
-              height={300}
-            />
-          </Section>
+              <Section title="Soft Skills">
+                <HorizontalBarChart
+                  data={data.soft_skills?.slice(0, 10).map(s => ({ name: s.name, value: s.count, pct: s.pct }))}
+                  color="#71717A"
+                  height={300}
+                />
+              </Section>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Section title="Work Type">
-              <DonutChart data={Object.entries(data.work_type_dist || {}).map(([k, v]) => ({ name: k, value: v as number }))} />
-            </Section>
-            <Section title="Seniority">
-              <DonutChart data={Object.entries(data.seniority_dist || {}).map(([k, v]) => ({ name: k, value: v as number }))} />
-            </Section>
-          </div>
-        </div>
-      )}
-
-      {/* Salary Tab */}
-      {tab === 'Salary' && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-2 gap-3">
-            <StatCard label="Avg. Min" value={fmt$(data.salary_stats?.overall_avg_min)} />
-            <StatCard label="Avg. Max" value={fmt$(data.salary_stats?.overall_avg_max)} />
-          </div>
-
-          <Section title="By Seniority">
-            <SalaryRangeChart
-              data={Object.entries(data.salary_stats?.by_seniority || {}).map(([k, v]: [string, any]) => ({
-                name: k, avg_min: v.avg_min, avg_max: v.avg_max || v.avg_min, count: v.count,
-              })).sort((a, b) => a.avg_min - b.avg_min)}
-            />
-          </Section>
-
-          <Section title="Top Paying Companies">
-            <div className="space-y-1">
-              {(data.salary_stats?.top_paying_companies || []).slice(0, 10).map((c: any, i: number) => (
-                <div key={i} className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-0">
-                  <span className="text-sm text-primary">
-                    <span className="font-mono text-xs text-faint mr-2">{String(i + 1).padStart(2, '0')}</span>
-                    {c.name}
-                  </span>
-                  <span className="font-mono text-sm font-semibold text-primary">{fmt$(c.avg_max)}</span>
-                </div>
-              ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Section title="Work Type">
+                  <DonutChart data={Object.entries(data.work_type_dist || {}).map(([k, v]) => ({ name: k, value: v as number }))} />
+                </Section>
+                <Section title="Seniority">
+                  <DonutChart data={Object.entries(data.seniority_dist || {}).map(([k, v]) => ({ name: k, value: v as number }))} />
+                </Section>
+              </div>
             </div>
-          </Section>
+          </LoginGate>
         </div>
       )}
 
-      {/* Resume Tab */}
-      {tab === 'Resume' && (
-        <div className="space-y-8">
-          <div className="card p-5 border-l-4 border-l-lime">
-            <p className="text-sm font-semibold text-primary mb-1">Resume optimization for {ROLE_LABELS[role]}</p>
-            <p className="text-xs text-secondary">Based on {data.total_jobs} recent job postings. Include these keywords to match what employers search for.</p>
-          </div>
+      {/* Salary Tab — fully gated */}
+      {tab === 'Salary' && (
+        <LoginGate locked={!user} message="Sign in to access salary benchmarks and top paying companies">
+          <div className="space-y-8">
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard label="Avg. Min" value={fmt$(data.salary_stats?.overall_avg_min)} />
+              <StatCard label="Avg. Max" value={fmt$(data.salary_stats?.overall_avg_max)} />
+            </div>
 
-          {/* Personalized skills gap panel */}
-          {user && skillsGap && skillsGap.strengths?.length > 0 && (
+            <Section title="By Seniority">
+              <SalaryRangeChart
+                data={Object.entries(data.salary_stats?.by_seniority || {}).map(([k, v]: [string, any]) => ({
+                  name: k, avg_min: v.avg_min, avg_max: v.avg_max || v.avg_min, count: v.count,
+                })).sort((a, b) => a.avg_min - b.avg_min)}
+              />
+            </Section>
+
+            <Section title="Top Paying Companies">
+              <div className="space-y-1">
+                {(data.salary_stats?.top_paying_companies || []).slice(0, 10).map((c: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-2 border-b border-zinc-100 last:border-0">
+                    <span className="text-sm text-primary">
+                      <span className="font-mono text-xs text-faint mr-2">{String(i + 1).padStart(2, '0')}</span>
+                      {c.name}
+                    </span>
+                    <span className="font-mono text-sm font-semibold text-primary">{fmt$(c.avg_max)}</span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          </div>
+        </LoginGate>
+      )}
+
+      {/* Resume Tab — fully gated */}
+      {tab === 'Resume' && (
+        <LoginGate locked={!user} message="Sign in to see resume keywords and optimization tips">
+          <div className="space-y-8">
+            <div className="card p-5 border-l-4 border-l-lime">
+              <p className="text-sm font-semibold text-primary mb-1">Resume optimization for {ROLE_LABELS[role]}</p>
+              <p className="text-xs text-secondary">Based on {data.total_jobs} recent job postings. Include these keywords to match what employers search for.</p>
+            </div>
+
+            {/* Personalized skills gap panel */}
+            {user && skillsGap && skillsGap.strengths?.length > 0 && (
             <div className="card p-5 border-l-4 border-l-orange-400">
               <h3 className="text-sm font-bold text-primary mb-1">Your Profile vs. Market Demand</h3>
               <p className="text-2xs text-tertiary mb-4">Based on your resume analysis across {skillsGap.total_matches} matched roles</p>
@@ -233,6 +243,7 @@ export default function MarketDashboard() {
           <KeywordBlock title="Must-Have" subtitle=">30% of JDs mention these" keywords={data.must_have_keywords} accent />
           <KeywordBlock title="Nice-to-Have" subtitle="15–30% of JDs mention these" keywords={data.nice_to_have_keywords} />
         </div>
+        </LoginGate>
       )}
     </div>
   )

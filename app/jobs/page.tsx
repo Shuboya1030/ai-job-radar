@@ -5,7 +5,10 @@ import Link from 'next/link'
 import SaveButton from '@/components/save-button'
 import AlertBanner from '@/components/alert-banner'
 import MatchBadge from '@/components/match-badge'
+import LoginGate from '@/components/login-gate'
 import { useAuth } from '@/components/auth-provider'
+
+const VISIBLE_JOBS = 15
 
 const ROLE_OPTIONS = ['AI PM', 'AI Engineer', 'Software Engineer']
 const WORK_TYPE_OPTIONS = ['Remote', 'Hybrid', 'On-site']
@@ -164,16 +167,32 @@ export default function JobBoard() {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {jobs.map(job => (
-            <JobCard key={job.id} job={job} match={matchMap[job.id]} />
-          ))}
-        </div>
+        <>
+          {/* Visible jobs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {(user ? jobs : jobs.slice(0, VISIBLE_JOBS)).map(job => (
+              <JobCard key={job.id} job={job} match={matchMap[job.id]} />
+            ))}
+          </div>
+
+          {/* Gated jobs — blurred for non-logged-in users */}
+          {!user && jobs.length > VISIBLE_JOBS && (
+            <div className="mt-3">
+              <LoginGate locked={true} message={`Sign in to see all ${total} jobs — you're only seeing ${VISIBLE_JOBS}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {jobs.slice(VISIBLE_JOBS, VISIBLE_JOBS + 6).map(job => (
+                    <JobCard key={job.id} job={job} />
+                  ))}
+                </div>
+              </LoginGate>
+            </div>
+          )}
+        </>
       )}
 
       {loading && <p className="text-center text-tertiary text-sm py-12">Loading...</p>}
 
-      {!loading && jobs.length < total && (
+      {!loading && user && jobs.length < total && (
         <button
           onClick={loadMore}
           className="w-full mt-6 py-2.5 text-xs font-mono font-semibold text-primary bg-surface-raised rounded border border-zinc-200 hover:border-zinc-400 transition-colors"

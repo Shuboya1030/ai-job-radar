@@ -178,7 +178,7 @@ export default function JobBoard() {
           {/* Gated jobs — blurred for non-logged-in users */}
           {!user && jobs.length > VISIBLE_JOBS && (
             <div className="mt-3">
-              <LoginGate locked={true} message={`Sign in to see all ${total} jobs — you're only seeing ${VISIBLE_JOBS}`}>
+              <LoginGate locked={!user} message={`Sign in to see all ${total} jobs — you're only seeing ${VISIBLE_JOBS}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {jobs.slice(VISIBLE_JOBS, VISIBLE_JOBS + 6).map(job => (
                     <JobCard key={job.id} job={job} />

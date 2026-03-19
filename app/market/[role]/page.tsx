@@ -65,7 +65,7 @@ export default function MarketDashboard() {
 
       <div className="flex items-end justify-between mb-8">
         <div>
-          <h1 className="text-xl font-bold text-primary">{ROLE_LABELS[role]}</h1>
+          <h1 className="text-xl font-bold text-primary">Most Wanted Skills of {ROLE_LABELS[role]}</h1>
           <p className="text-xs font-mono text-tertiary mt-1">
             {data.total_jobs} postings &middot; {data.jobs_with_salary_pct}% with salary data
           </p>

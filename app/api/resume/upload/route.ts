@@ -2,9 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
-import { detectFileType } from '@/lib/resume-parser'
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+
+type FileType = 'pdf' | 'docx' | 'md'
+
+function detectFileType(fileName: string): FileType | null {
+  const ext = fileName.toLowerCase().split('.').pop()
+  if (ext === 'pdf') return 'pdf'
+  if (ext === 'docx') return 'docx'
+  if (ext === 'md' || ext === 'markdown') return 'md'
+  return null
+}
 
 async function getUser() {
   const cookieStore = cookies()

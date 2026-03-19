@@ -15,8 +15,8 @@ export async function extractText(buffer: Buffer, fileType: FileType): Promise<s
 
   switch (fileType) {
     case 'pdf': {
-      // pdf-parse@1.1.1 — classic version, works in Node.js/serverless without DOM
-      const pdfParse = (await import('pdf-parse')).default
+      // Import lib/pdf-parse directly to skip index.js debug mode test file loading
+      const pdfParse = require('pdf-parse/lib/pdf-parse.js')
       const result = await pdfParse(buffer)
       text = result.text
       break

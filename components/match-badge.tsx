@@ -7,9 +7,9 @@ interface MatchBadgeProps {
 }
 
 const tierConfig = {
-  strong: { label: 'Strong Match', bg: 'bg-lime/20', text: 'text-lime', border: 'border-lime/30' },
-  good: { label: 'Good Match', bg: 'bg-yellow-400/20', text: 'text-yellow-400', border: 'border-yellow-400/30' },
-  stretch: { label: 'Stretch', bg: 'bg-orange-400/20', text: 'text-orange-400', border: 'border-orange-400/30' },
+  strong: { label: 'Strong', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
+  good: { label: 'Good', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+  stretch: { label: 'Stretch', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
 }
 
 export default function MatchBadge({ tier, score, size = 'sm' }: MatchBadgeProps) {
@@ -17,9 +17,9 @@ export default function MatchBadge({ tier, score, size = 'sm' }: MatchBadgeProps
   const sizeClass = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-3 py-1'
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border ${config.bg} ${config.text} ${config.border} ${sizeClass} font-mono`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border ${config.bg} ${config.text} ${config.border} ${sizeClass} font-semibold`}>
       {config.label}
-      {score !== undefined && <span className="opacity-70">({score})</span>}
+      {score !== undefined && <span className="font-mono opacity-70">{score}</span>}
     </span>
   )
 }

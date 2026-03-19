@@ -1,11 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
 })
 
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = 'gpt-4o'
 
 // --- Resume Parsing ---
 
@@ -21,12 +21,13 @@ export interface ParsedProfile {
 }
 
 export async function parseResume(rawText: string): Promise<ParsedProfile> {
-  const response = await anthropic.messages.create({
+  const response = await openai.chat.completions.create({
     model: MODEL,
     max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `Parse this resume and extract structured data. Return ONLY valid JSON, no markdown.
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You parse resumes into structured JSON. Return ONLY valid JSON.' },
+      { role: 'user', content: `Parse this resume and extract structured data.
 
 Resume text:
 ---
@@ -48,12 +49,11 @@ Return JSON with this exact schema:
 Rules:
 - skills: technical skills only (languages, frameworks, tools, methods)
 - seniority: one of "junior", "mid", "senior", "lead", "executive"
-- experience_years: total years of professional experience (null if unclear)
-- Return ONLY the JSON object, nothing else`
-    }],
+- experience_years: total years of professional experience (null if unclear)` }
+    ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const text = response.choices[0]?.message?.content || '{}'
   return JSON.parse(text) as ParsedProfile
 }
 
@@ -125,12 +125,13 @@ export async function matchJobsBatch(
 
   const calibration = await getCalibrationExamples()
 
-  const response = await anthropic.messages.create({
+  const response = await openai.chat.completions.create({
     model: MODEL,
     max_tokens: 4000,
-    messages: [{
-      role: 'user',
-      content: `You are a job matching engine. Score how well this candidate matches each job using a weighted rubric.
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You are a job matching engine. Return ONLY valid JSON. Always wrap results in {"matches": [...]}.' },
+      { role: 'user', content: `Score how well this candidate matches each job using a weighted rubric.
 
 CANDIDATE PROFILE:
 - Skills: ${profile.skills.join(', ')}
@@ -154,25 +155,18 @@ Total = sum of 4 dimensions (0-100).
 - 40-59 = stretch
 - Below 40 = exclude
 ${calibration}
-For EACH job scoring >= 40, return a JSON array. Return ONLY valid JSON array, no markdown.
+Return JSON: {"matches": [{"job_id":"uuid","match_score":85,"match_tier":"strong","match_reasoning":"reason","skills_matched":["Python"],"skills_missing":["K8s"],"dimension_scores":{"domain":25,"skills":22,"experience":20,"role_type":12}}]}
 
-[{
-  "job_id": "the-uuid",
-  "match_score": 85,
-  "match_tier": "strong",
-  "match_reasoning": "One sentence explaining match quality referencing which dimensions scored high/low",
-  "skills_matched": ["Python", "PyTorch"],
-  "skills_missing": ["Kubernetes"],
-  "dimension_scores": {"domain": 25, "skills": 22, "experience": 20, "role_type": 12}
-}]
-
-Return ONLY the JSON array.`
-    }],
+Only include jobs scoring >= 40.` }
+    ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '[]'
+  const text = response.choices[0]?.message?.content || '{"matches":[]}'
   try {
-    return JSON.parse(text) as MatchResult[]
+    const parsed = JSON.parse(text)
+    // Handle both {"matches": [...]} and direct array
+    const results = Array.isArray(parsed) ? parsed : (parsed.matches || [])
+    return results as MatchResult[]
   } catch {
     console.error('Failed to parse match results:', text.slice(0, 200))
     return []

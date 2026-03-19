@@ -5,15 +5,15 @@
  */
 
 const { createClient } = require('@supabase/supabase-js')
-const Anthropic = require('@anthropic-ai/sdk').default
+const OpenAI = require('openai').default
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const MODEL = 'claude-sonnet-4-20250514'
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const MODEL = 'gpt-4o'
 const BATCH_SIZE = 20
 
 async function matchJobsBatch(profile, jobs) {
@@ -21,12 +21,13 @@ async function matchJobsBatch(profile, jobs) {
     `[${i}] ID:${j.id} | ${j.title} at ${j.company_name} (${j.funding_stage || 'Unknown'}) | ${j.location || 'Unknown'} | ${(j.description || '').slice(0, 300)}`
   ).join('\n')
 
-  const response = await anthropic.messages.create({
+  const response = await openai.chat.completions.create({
     model: MODEL,
     max_tokens: 4000,
-    messages: [{
-      role: 'user',
-      content: `You are a job matching engine. Score how well this candidate matches each job.
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You are a job matching engine. Return ONLY valid JSON. Always wrap results in {"matches": [...]}.' },
+      { role: 'user', content: `Score how well this candidate matches each job.
 
 CANDIDATE PROFILE:
 - Skills: ${profile.skills.join(', ')}
@@ -38,18 +39,17 @@ CANDIDATE PROFILE:
 JOBS TO MATCH:
 ${jobList}
 
-For EACH job, return a JSON array. Only include jobs scoring >= 40. Return ONLY valid JSON array, no markdown.
-
-[{"job_id":"uuid","match_score":85,"match_tier":"strong","match_reasoning":"reason","skills_matched":["Python"],"skills_missing":["K8s"]}]
-
 Scoring: 80-100=strong, 60-79=good, 40-59=stretch, <40=exclude.
-Return ONLY the JSON array.`
-    }],
+Only include jobs scoring >= 40.
+
+Return JSON: {"matches": [{"job_id":"uuid","match_score":85,"match_tier":"strong","match_reasoning":"reason","skills_matched":["Python"],"skills_missing":["K8s"]}]}` }
+    ],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '[]'
+  const text = response.choices[0]?.message?.content || '{"matches":[]}'
   try {
-    return JSON.parse(text)
+    const parsed = JSON.parse(text)
+    return Array.isArray(parsed) ? parsed : (parsed.matches || [])
   } catch {
     console.error('Failed to parse:', text.slice(0, 200))
     return []

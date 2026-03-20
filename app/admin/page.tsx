@@ -414,9 +414,10 @@ function SubscriberHealthPanel({ password }: { password: string }) {
   }, [password])
 
   if (loading) return <p className="text-center text-tertiary text-sm py-8">Loading...</p>
-  if (!data) return <p className="text-center text-tertiary text-sm py-8">Failed to load.</p>
+  if (!data?.metrics) return <p className="text-center text-tertiary text-sm py-8">Failed to load subscriber data.</p>
 
   const m = data.metrics
+  const subs = data.subscribers || []
 
   return (
     <div className="space-y-6">
@@ -481,7 +482,7 @@ function SubscriberHealthPanel({ password }: { password: string }) {
               </tr>
             </thead>
             <tbody>
-              {data.subscribers.map((u: any) => (
+              {subs.map((u: any) => (
                 <tr key={u.id} className="border-b border-zinc-50">
                   <td className="py-2 font-mono text-primary">{u.email}</td>
                   <td className="py-2">

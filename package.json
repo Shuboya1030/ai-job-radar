@@ -23,7 +23,8 @@
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.12.0",
-    "resend": "^6.9.4"
+    "resend": "^6.9.4",
+    "stripe": "^20.4.1"
   },
   "devDependencies": {
     "@types/node": "^20",

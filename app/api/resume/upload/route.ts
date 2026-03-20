@@ -83,12 +83,12 @@ export async function POST(req: NextRequest) {
   // Delete old match results
   await db.from('user_job_matches').delete().eq('user_id', user.id)
 
-  // Trigger async processing (fire-and-forget)
+  // Trigger profile parsing only (not matching — matching requires subscription)
   const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
   fetch(processUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: user.id }),
+    body: JSON.stringify({ user_id: user.id, mode: 'parse_only' }),
   }).catch(err => console.error('Failed to trigger processing:', err))
 
   return NextResponse.json({ status: 'processing' }, { status: 202 })

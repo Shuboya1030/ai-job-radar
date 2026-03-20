@@ -8,14 +8,18 @@ interface AuthContextType {
   user: User | null
   session: Session | null
   loading: boolean
+  subscriptionStatus: 'free' | 'active' | 'cancelled'
   signInWithGoogle: () => Promise<void>
   signOut: () => Promise<void>
+  subscribe: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null, session: null, loading: true,
+  subscriptionStatus: 'free',
   signInWithGoogle: async () => {},
   signOut: async () => {},
+  subscribe: async () => {},
 })
 
 export function useAuth() {
@@ -26,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'free' | 'active' | 'cancelled'>('free')
 
   const supabase = createSupabaseBrowserClient()
 
@@ -34,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s)
       setUser(s?.user ?? null)
-      if (s?.user) ensureProfile(s.user)
+      if (s?.user) { ensureProfile(s.user); fetchSubscription(s.user.id) }
       setLoading(false)
     })
 
@@ -43,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async (_event, s) => {
         setSession(s)
         setUser(s?.user ?? null)
-        if (s?.user) await ensureProfile(s.user)
+        if (s?.user) { await ensureProfile(s.user); fetchSubscription(s.user.id) }
         setLoading(false)
       }
     )
@@ -85,6 +90,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Fetch subscription status
+  async function fetchSubscription(userId: string) {
+    try {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('subscription_status')
+        .eq('id', userId)
+        .single()
+      if (data?.subscription_status) {
+        setSubscriptionStatus(data.subscription_status as any)
+      }
+    } catch {}
+  }
+
+  // Trigger Stripe Checkout
+  async function subscribe() {
+    const res = await fetch('/api/billing/checkout', { method: 'POST' })
+    const data = await res.json()
+    if (data.url) window.location.href = data.url
+  }
+
   async function signInWithGoogle() {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -115,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, subscriptionStatus, signInWithGoogle, signOut, subscribe }}>
       {children}
     </AuthContext.Provider>
   )

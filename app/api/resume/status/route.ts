@@ -20,19 +20,33 @@ export async function GET() {
   const { createSupabaseServerClient } = await import('@/lib/supabase-server')
   const db = createSupabaseServerClient()
 
-  const { data } = await db
+  // Get resume status
+  const { data: resume } = await db
     .from('user_resumes')
     .select('processing_status, error_message, file_name, uploaded_at')
     .eq('user_id', user.id)
     .single()
 
-  if (!data) return NextResponse.json({ has_resume: false })
+  // Get subscription status
+  const { data: profile } = await db
+    .from('user_profiles')
+    .select('subscription_status')
+    .eq('id', user.id)
+    .single()
+
+  if (!resume) {
+    return NextResponse.json({
+      has_resume: false,
+      subscription_status: profile?.subscription_status || 'free',
+    })
+  }
 
   return NextResponse.json({
     has_resume: true,
-    processing_status: data.processing_status,
-    error_message: data.error_message,
-    file_name: data.file_name,
-    uploaded_at: data.uploaded_at,
+    processing_status: resume.processing_status,
+    error_message: resume.error_message,
+    file_name: resume.file_name,
+    uploaded_at: resume.uploaded_at,
+    subscription_status: profile?.subscription_status || 'free',
   })
 }

@@ -121,28 +121,25 @@ export default function DashboardPage() {
   }, [fetchStatus])
 
   // Auto-trigger matching when paid user has parsed resume but no matches
+  // Uses /api/resume/ensure-matched which tracks retries and sends alerts
   useEffect(() => {
     if (!status?.has_resume) return
     const isActive = status.subscription_status === 'active' || isPaid
-    const needsMatching = status.processing_status === 'parsed' || status.processing_status === 'completed'
+    const needsMatching = ['parsed', 'completed', 'failed'].includes(status.processing_status)
     if (!isActive || !needsMatching) return
 
-    // Check if user has matches already
     fetch('/api/resume/matches')
       .then(r => r.json())
       .then(data => {
-        if (data.matches?.length === 0 || !data.matches) {
-          // No matches yet — trigger stage 1
-          fetch('/api/resume/process', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user?.id, mode: 'stage1' }),
-          }).then(() => fetchStatus())
+        if (!data.matches?.length) {
+          // No matches — call ensure-matched (handles retries + alerting)
+          fetch('/api/resume/ensure-matched', { method: 'POST' })
+            .then(() => fetchStatus())
             .catch(() => {})
         }
       })
       .catch(() => {})
-  }, [status?.has_resume, status?.processing_status, status?.subscription_status, isPaid, user?.id, fetchStatus])
+  }, [status?.has_resume, status?.processing_status, status?.subscription_status, isPaid, fetchStatus])
 
   const trackClick = useCallback((matchId: string) => {
     if (clickedRef.current.has(matchId)) return

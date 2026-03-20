@@ -9,6 +9,9 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_subscription
   ON user_profiles(subscription_status)
   WHERE subscription_status = 'active';
 
+-- Retry counter for matching failures
+ALTER TABLE user_resumes ADD COLUMN IF NOT EXISTS match_retry_count INTEGER DEFAULT 0;
+
 -- Update processing_status constraint to support new statuses
 ALTER TABLE user_resumes DROP CONSTRAINT IF EXISTS user_resumes_processing_status_check;
 ALTER TABLE user_resumes ADD CONSTRAINT user_resumes_processing_status_check

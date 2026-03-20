@@ -25,7 +25,8 @@ export default function DashboardPage() {
   const [showUpload, setShowUpload] = useState(false)
   const clickedRef = useRef(new Set<string>())
 
-  const isPaid = subscriptionStatus === 'active'
+  // Use subscription status from status API (more reliable than auth provider async fetch)
+  const isPaid = status?.subscription_status === 'active' || subscriptionStatus === 'active'
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch('/api/resume/status')
@@ -70,12 +71,13 @@ export default function DashboardPage() {
     fetchStatus().then(data => {
       if (!data.has_resume) return
       // Always fetch profile + market comparison (free)
-      if (['parsed', 'completed', 'matching_stage1', 'matching_stage2'].includes(data.processing_status)) {
+      const readyStatuses = ['parsed', 'completed', 'matching', 'matching_stage1', 'matching_stage2']
+      if (readyStatuses.includes(data.processing_status)) {
         fetchProfile()
         fetchMarketComparison()
       }
-      // Fetch matches only for paid users with completed matching
-      if (data.processing_status === 'completed' && (data.subscription_status === 'active' || data.subscription_status === 'cancelled')) {
+      // Fetch matches for paid/cancelled users OR anyone with completed status who has matches
+      if (data.processing_status === 'completed') {
         fetchResults()
       }
     })
@@ -166,7 +168,7 @@ export default function DashboardPage() {
   }
 
   const isParsingProfile = status && ['pending', 'parsing'].includes(status.processing_status)
-  const isProfileReady = status && ['parsed', 'matching_stage1', 'matching_stage2', 'completed'].includes(status.processing_status)
+  const isProfileReady = status && ['parsed', 'matching', 'matching_stage1', 'matching_stage2', 'completed'].includes(status.processing_status)
   const isMatching = status && ['matching_stage1', 'matching_stage2'].includes(status.processing_status)
   const isComplete = status?.processing_status === 'completed'
   const isFailed = status?.processing_status === 'failed'

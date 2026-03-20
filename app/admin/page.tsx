@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 import { Eye, Users, Briefcase, Building2, TrendingUp, Lock, Activity, UserCheck, UserX, Zap } from 'lucide-react'
 
+function toSeattle(utcStr: string | null | undefined): string {
+  if (!utcStr) return '—'
+  return new Date(utcStr).toLocaleString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
 interface Stats {
   dau: { date: string; count: number }[]
   topPages: { path: string; count: number }[]
@@ -545,7 +550,7 @@ function SubscriberHealthPanel({ password }: { password: string }) {
                       {u.resume?.match_duration_seconds ? u.resume.match_duration_seconds + 's' : '—'}
                     </span>
                   </td>
-                  <td className="py-2 font-mono text-tertiary">{u.created_at?.split('T')[0]}</td>
+                  <td className="py-2 font-mono text-tertiary">{toSeattle(u.created_at)}</td>
                 </tr>
               ))}
             </tbody>

@@ -47,9 +47,11 @@ Return JSON with this exact schema:
 }
 
 Rules:
+- skills: ONLY extract skills that are EXPLICITLY mentioned in the resume text. Do NOT infer, guess, or add skills that are not literally written. If the resume says "Power BI" do not add "Tableau" unless "Tableau" is also written.
 - skills: technical skills only (languages, frameworks, tools, methods)
 - seniority: one of "junior", "mid", "senior", "lead", "executive"
-- experience_years: total years of professional experience (null if unclear)` }
+- experience_years: total years of professional experience (null if unclear)
+- Be precise: every skill in your output must have a corresponding word or phrase in the resume text` }
     ],
   })
 

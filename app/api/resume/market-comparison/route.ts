@@ -59,10 +59,19 @@ export async function GET() {
   const allMarketSkills = [...parseSkills(snapshot.hard_skills), ...parseSkills(snapshot.tools)]
   const userSkillsLower = userSkills.map(s => s.toLowerCase())
 
-  const matchSkill = (marketName: string) =>
-    userSkillsLower.some(us =>
-      us.includes(marketName.toLowerCase()) || marketName.toLowerCase().includes(us)
-    )
+  const matchSkill = (marketName: string) => {
+    const msLower = marketName.toLowerCase().trim()
+    return userSkillsLower.some(us => {
+      // Exact match
+      if (us === msLower) return true
+      // One is a multi-word version of the other (e.g., "a/b testing" matches "A/B Testing")
+      // But skip very short skills (<=2 chars like "R", "C") to avoid false matches
+      if (us.length <= 2 || msLower.length <= 2) return us === msLower
+      // Allow match if one fully contains the other as a word boundary
+      // e.g., "data analysis" matches "Data Analysis" but "r" doesn't match "JIRA"
+      return us === msLower || msLower === us
+    })
+  }
 
   const yourStrengths = allMarketSkills
     .filter(ms => matchSkill(ms.name))

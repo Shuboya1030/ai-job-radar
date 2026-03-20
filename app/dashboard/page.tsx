@@ -225,13 +225,9 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Parsing profile */}
-      {isParsingProfile && (
-        <div className="card p-8 text-center mb-6">
-          <Loader2 className="w-10 h-10 text-zinc-400 animate-spin mx-auto mb-3" />
-          <p className="text-primary font-semibold mb-1">Analyzing your resume...</p>
-          <p className="text-tertiary text-sm">Extracting skills, experience, and background</p>
-        </div>
+      {/* Processing progress */}
+      {(isParsingProfile || isMatching) && (
+        <ProcessingProgress status={status?.processing_status} />
       )}
 
       {/* Failed */}
@@ -255,16 +251,11 @@ export default function DashboardPage() {
             {/* Market Comparison — FREE for all users */}
             {marketComparison && <MarketComparisonCard data={marketComparison} />}
 
-            {/* Matching in progress (paid users) */}
-            {isMatching && isPaid && (
-              <div className="card p-6 text-center">
-                <Loader2 className="w-8 h-8 text-zinc-400 animate-spin mx-auto mb-3" />
-                <p className="text-primary font-semibold mb-1">
-                  {status.processing_status === 'matching_stage1' ? 'Finding your top matches...' : 'Scanning more jobs in background...'}
-                </p>
-                <p className="text-tertiary text-sm">
-                  {status.processing_status === 'matching_stage1' ? 'This takes about 10 seconds' : 'Results appearing as they\'re found'}
-                </p>
+            {/* Matching in progress — show inline note if stage 2 */}
+            {status?.processing_status === 'matching_stage2' && isPaid && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-50 border border-zinc-200 text-xs text-secondary mb-2">
+                <Loader2 className="w-3.5 h-3.5 text-zinc-400 animate-spin" />
+                Scanning more jobs in the background — new matches will appear automatically
               </div>
             )}
 
@@ -384,6 +375,80 @@ function HowItWorks() {
           <p className="text-2xs text-tertiary mt-1">{s.desc}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ProcessingProgress({ status }: { status: string }) {
+  const steps = [
+    { key: 'pending', label: 'Uploading resume', detail: 'Securely storing your file' },
+    { key: 'parsing', label: 'Reading your resume', detail: 'AI is extracting your skills, experience, and background' },
+    { key: 'matching_stage1', label: 'Matching against top jobs', detail: 'Comparing your profile to the 50 most relevant positions' },
+    { key: 'matching_stage2', label: 'Deep scanning all jobs', detail: 'Analyzing 600+ positions for additional matches' },
+  ]
+
+  const statusOrder = ['pending', 'parsing', 'matching_stage1', 'matching_stage2']
+  const currentIdx = statusOrder.indexOf(status)
+
+  return (
+    <div className="card p-6 mb-6">
+      <div className="flex items-center gap-3 mb-5">
+        <Loader2 className="w-5 h-5 text-zinc-400 animate-spin flex-shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-primary">
+            {steps.find(s => s.key === status)?.label || 'Processing...'}
+          </p>
+          <p className="text-2xs text-tertiary">
+            {steps.find(s => s.key === status)?.detail}
+          </p>
+        </div>
+      </div>
+
+      {/* Step progress bar */}
+      <div className="space-y-3">
+        {steps.map((step, i) => {
+          const isDone = i < currentIdx
+          const isCurrent = i === currentIdx
+          const isPending = i > currentIdx
+
+          return (
+            <div key={step.key} className="flex items-center gap-3">
+              {/* Step indicator */}
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-2xs font-bold ${
+                isDone ? 'bg-emerald-100 text-emerald-700' :
+                isCurrent ? 'bg-zinc-900 text-white' :
+                'bg-zinc-100 text-zinc-400'
+              }`}>
+                {isDone ? '✓' : i + 1}
+              </div>
+
+              {/* Label + progress bar */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-medium ${
+                    isDone ? 'text-emerald-700' : isCurrent ? 'text-primary' : 'text-zinc-400'
+                  }`}>
+                    {step.label}
+                  </span>
+                  {isDone && <span className="text-2xs text-emerald-600">Done</span>}
+                  {isCurrent && <span className="text-2xs text-tertiary">In progress...</span>}
+                </div>
+                <div className="h-1 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-1000 ${
+                    isDone ? 'bg-emerald-500 w-full' :
+                    isCurrent ? 'bg-zinc-800 w-2/3 animate-pulse' :
+                    'bg-zinc-200 w-0'
+                  }`} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <p className="text-2xs text-faint mt-4 text-center">
+        We scan 600+ jobs at funded AI startups to find your best matches — quality takes a moment
+      </p>
     </div>
   )
 }

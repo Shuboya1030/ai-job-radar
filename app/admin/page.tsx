@@ -28,7 +28,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'retention' | 'matches'>('overview')
+  const [tab, setTab] = useState<'overview' | 'retention' | 'matches' | 'subscribers'>('overview')
 
   const login = async () => {
     setLoading(true); setError('')
@@ -83,12 +83,12 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-bold text-primary">Admin Dashboard</h1>
         <div className="flex gap-0.5 border-b border-zinc-200">
-          {(['overview', 'retention', 'matches'] as const).map(t => (
+          {(['overview', 'retention', 'matches', 'subscribers'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${
                 tab === t ? 'border-primary text-primary' : 'border-transparent text-tertiary hover:text-secondary'
               }`}>
-              {t === 'overview' ? 'Overview' : t === 'retention' ? 'Retention' : 'Match Quality'}
+              {t === 'overview' ? 'Overview' : t === 'retention' ? 'Retention' : t === 'matches' ? 'Match Quality' : 'Subscribers'}
             </button>
           ))}
         </div>
@@ -249,6 +249,8 @@ export default function AdminDashboard() {
       )}
 
       {tab === 'matches' && <MatchQualityPanel password={password} />}
+
+      {tab === 'subscribers' && <SubscriberHealthPanel password={password} />}
     </div>
   )
 }
@@ -396,6 +398,131 @@ function MatchQualityPanel({ password }: { password: string }) {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function SubscriberHealthPanel({ password }: { password: string }) {
+  const [data, setData] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/subscribers', { headers: { 'x-admin-password': password } })
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [password])
+
+  if (loading) return <p className="text-center text-tertiary text-sm py-8">Loading...</p>
+  if (!data) return <p className="text-center text-tertiary text-sm py-8">Failed to load.</p>
+
+  const m = data.metrics
+
+  return (
+    <div className="space-y-6">
+      {/* Health metrics */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Total Users</p>
+          <p className="text-2xl font-mono font-bold text-primary">{m.total_users}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Active Subscribers</p>
+          <p className="text-2xl font-mono font-bold text-emerald-600">{m.active_subscribers}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">With Resume</p>
+          <p className="text-2xl font-mono font-bold text-primary">{m.users_with_resume}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Match Success Rate</p>
+          <p className={`text-2xl font-mono font-bold ${m.match_success_rate === 100 ? 'text-emerald-600' : 'text-red-500'}`}>{m.match_success_rate}%</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Stuck Paid Users</p>
+          <p className={`text-2xl font-mono font-bold ${m.stuck_paid_users === 0 ? 'text-emerald-600' : 'text-red-500'}`}>{m.stuck_paid_users}</p>
+        </div>
+      </div>
+
+      {/* Conversion funnel */}
+      <div className="card p-5">
+        <h2 className="section-label mb-4">Conversion Funnel</h2>
+        <div className="flex items-center gap-4">
+          <div className="text-center">
+            <p className="text-lg font-mono font-bold text-primary">{m.total_users}</p>
+            <p className="text-2xs text-tertiary">Registered</p>
+          </div>
+          <div className="text-xs text-faint">→ {m.signup_to_resume_rate}%</div>
+          <div className="text-center">
+            <p className="text-lg font-mono font-bold text-primary">{m.users_with_resume}</p>
+            <p className="text-2xs text-tertiary">Uploaded Resume</p>
+          </div>
+          <div className="text-xs text-faint">→ {m.resume_to_pay_rate}%</div>
+          <div className="text-center">
+            <p className="text-lg font-mono font-bold text-emerald-600">{m.active_subscribers}</p>
+            <p className="text-2xs text-tertiary">Paying</p>
+          </div>
+        </div>
+      </div>
+
+      {/* User table */}
+      <div className="card p-5">
+        <h2 className="section-label mb-4">All Users</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-zinc-200">
+                <th className="text-left py-2 font-mono text-tertiary">Email</th>
+                <th className="text-left py-2 font-mono text-tertiary">Status</th>
+                <th className="text-left py-2 font-mono text-tertiary">Resume</th>
+                <th className="text-right py-2 font-mono text-tertiary">Matches</th>
+                <th className="text-right py-2 font-mono text-tertiary">Retries</th>
+                <th className="text-left py-2 font-mono text-tertiary">Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.subscribers.map((u: any) => (
+                <tr key={u.id} className="border-b border-zinc-50">
+                  <td className="py-2 font-mono text-primary">{u.email}</td>
+                  <td className="py-2">
+                    <span className={`px-2 py-0.5 rounded text-2xs font-bold ${
+                      u.subscription_status === 'active' ? 'bg-emerald-50 text-emerald-700' :
+                      u.subscription_status === 'cancelled' ? 'bg-red-50 text-red-600' :
+                      'bg-zinc-100 text-zinc-600'
+                    }`}>
+                      {u.subscription_status || 'free'}
+                    </span>
+                  </td>
+                  <td className="py-2">
+                    {u.resume ? (
+                      <span className={`px-2 py-0.5 rounded text-2xs font-semibold ${
+                        u.resume.processing_status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
+                        u.resume.processing_status === 'failed' ? 'bg-red-50 text-red-600' :
+                        'bg-yellow-50 text-yellow-700'
+                      }`}>
+                        {u.resume.processing_status}
+                      </span>
+                    ) : (
+                      <span className="text-faint">none</span>
+                    )}
+                  </td>
+                  <td className="py-2 text-right font-mono">
+                    <span className={u.subscription_status === 'active' && u.match_count === 0 ? 'text-red-500 font-bold' : 'text-primary'}>
+                      {u.match_count}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right font-mono">
+                    <span className={u.resume?.match_retry_count > 0 ? 'text-amber-600' : 'text-faint'}>
+                      {u.resume?.match_retry_count || 0}
+                    </span>
+                  </td>
+                  <td className="py-2 font-mono text-tertiary">{u.created_at?.split('T')[0]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }

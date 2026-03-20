@@ -18,7 +18,7 @@ const ROLE_LABELS: Record<string, string> = {
   'swe': 'Software Engineer',
 }
 
-const TABS = ['Skills', 'Salary', 'Resume']
+const TABS = ['Skills', 'Salary', 'Resume Tips']
 
 export default function MarketDashboard() {
   const params = useParams()
@@ -183,8 +183,8 @@ export default function MarketDashboard() {
         </LoginGate>
       )}
 
-      {/* Resume Tab — fully gated */}
-      {tab === 'Resume' && (
+      {/* Resume Tips Tab — fully gated */}
+      {tab === 'Resume Tips' && (
         <LoginGate locked={!user} message="Sign in to see resume keywords and optimization tips">
           <div className="space-y-8">
             <div className="card p-5 border-l-4 border-l-lime">
@@ -192,8 +192,8 @@ export default function MarketDashboard() {
               <p className="text-xs text-secondary">Based on {data.total_jobs} recent job postings. Include these keywords to match what employers search for.</p>
             </div>
 
-            {/* Personalized skills gap panel */}
-            {user && skillsGap && skillsGap.strengths?.length > 0 && (
+            {/* Personalized skills gap panel — removed, now only in Dashboard */}
+            {false && user && skillsGap && skillsGap.strengths?.length > 0 && (
             <div className="card p-5 border-l-4 border-l-orange-400">
               <h3 className="text-sm font-bold text-primary mb-1">Your Profile vs. Market Demand</h3>
               <p className="text-2xs text-tertiary mb-4">Based on your resume analysis across {skillsGap.total_matches} matched roles</p>
@@ -237,8 +237,6 @@ export default function MarketDashboard() {
               </Link>
             </div>
           )}
-
-          {user && !skillsGap && <ResumeCTA />}
 
           <KeywordBlock title="Must-Have" subtitle=">30% of JDs mention these" keywords={data.must_have_keywords} accent />
           <KeywordBlock title="Nice-to-Have" subtitle="15–30% of JDs mention these" keywords={data.nice_to_have_keywords} />

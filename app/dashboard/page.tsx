@@ -115,12 +115,34 @@ export default function DashboardPage() {
     if (typeof window === 'undefined') return
     const params = new URLSearchParams(window.location.search)
     if (params.get('subscription') === 'success') {
-      // Clean URL
       window.history.replaceState({}, '', '/dashboard')
-      // Start polling for match results
       fetchStatus()
     }
   }, [fetchStatus])
+
+  // Auto-trigger matching when paid user has parsed resume but no matches
+  useEffect(() => {
+    if (!status?.has_resume) return
+    const isActive = status.subscription_status === 'active' || isPaid
+    const needsMatching = status.processing_status === 'parsed' || status.processing_status === 'completed'
+    if (!isActive || !needsMatching) return
+
+    // Check if user has matches already
+    fetch('/api/resume/matches')
+      .then(r => r.json())
+      .then(data => {
+        if (data.matches?.length === 0 || !data.matches) {
+          // No matches yet — trigger stage 1
+          fetch('/api/resume/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user?.id, mode: 'stage1' }),
+          }).then(() => fetchStatus())
+            .catch(() => {})
+        }
+      })
+      .catch(() => {})
+  }, [status?.has_resume, status?.processing_status, status?.subscription_status, isPaid, user?.id, fetchStatus])
 
   const trackClick = useCallback((matchId: string) => {
     if (clickedRef.current.has(matchId)) return

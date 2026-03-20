@@ -25,8 +25,9 @@ export async function POST(req: NextRequest) {
     if (!resume) return NextResponse.json({ error: 'No resume found' }, { status: 404 })
 
     // === PARSE THEN MATCH MODE ===
-    // Parse profile, then auto-trigger stage1 matching (used when paywall disabled)
+    // Parse profile, then run stage1 matching in the SAME request (no fire-and-forget)
     if (mode === 'parse_then_match') {
+      // Step 1: Parse
       await db.from('user_resumes').update({ processing_status: 'parsing' }).eq('user_id', user_id)
 
       const { data: fileData, error: downloadError } = await db.storage
@@ -39,20 +40,95 @@ export async function POST(req: NextRequest) {
       await db.from('user_resumes').update({ raw_text: rawText }).eq('user_id', user_id)
 
       const profile = await parseResume(rawText)
+      const parseDuration = Math.round((Date.now() - startTime) / 1000)
       await db.from('user_resumes').update({
         parsed_profile: profile,
         processing_status: 'matching_stage1',
+        parse_duration_seconds: parseDuration,
       }).eq('user_id', user_id)
 
-      // Now trigger stage1 matching with the freshly parsed profile
-      const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
-      fetch(processUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, mode: 'stage1' }),
-      }).catch(err => console.error('Failed to trigger stage1:', err))
+      // Step 2: Stage 1 matching inline (NOT fire-and-forget)
+      await db.from('user_job_matches').delete().eq('user_id', user_id)
 
-      return NextResponse.json({ status: 'matching_stage1' })
+      const { data: jobs } = await db
+        .from('jobs')
+        .select('id, title, description, location, role_category, hard_skills, tools, companies(name, funding_stage)')
+        .eq('is_active', true)
+
+      if (!jobs?.length) {
+        await db.from('user_resumes').update({ processing_status: 'completed', match_duration_seconds: 0 }).eq('user_id', user_id)
+        return NextResponse.json({ status: 'completed', matches: 0 })
+      }
+
+      // Pre-filter top 50 by skill overlap
+      const userSkills = (profile.skills || []).map((s: string) => s.toLowerCase())
+      const userTitles = (profile.job_titles || []).join(' ').toLowerCase()
+      let userRole = 'AI Engineer'
+      if (userTitles.includes('product') || userTitles.includes('pm') || userTitles.includes('manager')) userRole = 'AI PM'
+      else if (userTitles.includes('software') || userTitles.includes('swe') || userTitles.includes('full stack')) userRole = 'Software Engineer'
+
+      const parseArr = (v: any): string[] => {
+        if (!v) return []
+        const arr = Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v) } catch { return [] } })() : [])
+        return arr.map((s: any) => (typeof s === 'string' ? s : s?.name || '').toLowerCase())
+      }
+
+      const scoredJobs = jobs.map(j => {
+        let score = 0
+        if (j.role_category === userRole) score += 10
+        const jobSkills = [...parseArr(j.hard_skills), ...parseArr(j.tools)]
+        for (const us of userSkills) {
+          if (jobSkills.some(js => js.includes(us) || us.includes(js))) score++
+        }
+        return { job: j, score }
+      })
+
+      scoredJobs.sort((a, b) => b.score - a.score)
+      const topJobs = scoredJobs.slice(0, STAGE1_TOP_N)
+
+      const jobsForMatching: JobForMatching[] = topJobs.map(({ job: j }) => ({
+        id: j.id,
+        title: j.title,
+        description: j.description,
+        company_name: (j.companies as any)?.name || 'Unknown',
+        funding_stage: (j.companies as any)?.funding_stage || null,
+        location: j.location,
+        role_category: j.role_category,
+      }))
+
+      let totalMatches = 0
+      for (let i = 0; i < jobsForMatching.length; i += BATCH_SIZE) {
+        const batch = jobsForMatching.slice(i, i + BATCH_SIZE)
+        try {
+          const results = await matchJobsBatch(profile, batch)
+          for (const match of results) {
+            if (match.match_score >= 40) {
+              await db.from('user_job_matches').upsert({
+                user_id,
+                job_id: match.job_id,
+                match_score: match.match_score,
+                match_tier: match.match_tier,
+                match_reasoning: match.match_reasoning,
+                skills_matched: match.skills_matched,
+                skills_missing: match.skills_missing,
+                dimension_scores: match.dimension_scores || null,
+                refreshed_at: new Date().toISOString(),
+              }, { onConflict: 'user_id,job_id' })
+              totalMatches++
+            }
+          }
+        } catch (batchError) {
+          console.error('parse_then_match batch failed:', batchError)
+        }
+      }
+
+      const matchDuration = Math.round((Date.now() - startTime) / 1000)
+      await db.from('user_resumes').update({
+        processing_status: 'completed',
+        match_duration_seconds: matchDuration,
+      }).eq('user_id', user_id)
+
+      return NextResponse.json({ status: 'completed', matches: totalMatches, duration_seconds: matchDuration })
     }
 
     // === PARSE ONLY MODE ===

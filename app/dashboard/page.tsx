@@ -5,24 +5,27 @@ import { useAuth } from '@/components/auth-provider'
 import ResumeUpload from '@/components/resume-upload'
 import MatchBadge from '@/components/match-badge'
 import MatchFeedback from '@/components/match-feedback'
+import SubscribeGate from '@/components/subscribe-gate'
 import Link from 'next/link'
 import {
   FileText, RefreshCw, Loader2, ChevronDown, ChevronUp,
-  ExternalLink, Briefcase, TrendingUp, Target, Zap,
+  ExternalLink, Briefcase, TrendingUp, Target, Zap, BarChart3,
 } from 'lucide-react'
 
 const MAX_STRONG = 5
 const MAX_GOOD = 5
 
 export default function DashboardPage() {
-  const { user, loading: authLoading, signInWithGoogle } = useAuth()
+  const { user, loading: authLoading, subscriptionStatus, signInWithGoogle } = useAuth()
   const [status, setStatus] = useState<any>(null)
   const [matches, setMatches] = useState<any[]>([])
   const [skillsGap, setSkillsGap] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
-  const [polling, setPolling] = useState(false)
+  const [marketComparison, setMarketComparison] = useState<any>(null)
   const [showUpload, setShowUpload] = useState(false)
   const clickedRef = useRef(new Set<string>())
+
+  const isPaid = subscriptionStatus === 'active'
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch('/api/resume/status')
@@ -45,34 +48,77 @@ export default function DashboardPage() {
     setProfile(profileData.parsed_profile || null)
   }, [])
 
+  const fetchMarketComparison = useCallback(async () => {
+    const res = await fetch('/api/resume/market-comparison')
+    if (res.ok) {
+      const data = await res.json()
+      setMarketComparison(data)
+    }
+  }, [])
+
+  const fetchProfile = useCallback(async () => {
+    const res = await fetch('/api/resume/profile')
+    if (res.ok) {
+      const data = await res.json()
+      setProfile(data.parsed_profile || null)
+    }
+  }, [])
+
+  // Initial load
   useEffect(() => {
     if (!user || authLoading) return
     fetchStatus().then(data => {
-      if (data.has_resume && data.processing_status === 'completed') {
+      if (!data.has_resume) return
+      // Always fetch profile + market comparison (free)
+      if (['parsed', 'completed', 'matching_stage1', 'matching_stage2'].includes(data.processing_status)) {
+        fetchProfile()
+        fetchMarketComparison()
+      }
+      // Fetch matches only for paid users with completed matching
+      if (data.processing_status === 'completed' && (data.subscription_status === 'active' || data.subscription_status === 'cancelled')) {
         fetchResults()
       }
     })
-  }, [user, authLoading, fetchStatus, fetchResults])
+  }, [user, authLoading, fetchStatus, fetchResults, fetchProfile, fetchMarketComparison])
 
+  // Poll while processing
   useEffect(() => {
     if (!status?.has_resume) return
-    const isProcessing = ['pending', 'parsing', 'matching'].includes(status.processing_status)
+    const isProcessing = ['pending', 'parsing', 'matching_stage1', 'matching_stage2'].includes(status.processing_status)
     if (!isProcessing) return
 
-    setPolling(true)
     const interval = setInterval(async () => {
       const data = await fetchStatus()
-      if (data.processing_status === 'completed') {
-        setPolling(false)
+      if (data.processing_status === 'parsed') {
         clearInterval(interval)
+        fetchProfile()
+        fetchMarketComparison()
+      } else if (data.processing_status === 'completed') {
+        clearInterval(interval)
+        fetchProfile()
+        fetchMarketComparison()
+        if (isPaid || data.subscription_status === 'active') fetchResults()
+      } else if (data.processing_status === 'matching_stage2' && isPaid) {
+        // Stage 1 done, start showing results while stage 2 continues
         fetchResults()
       } else if (data.processing_status === 'failed') {
-        setPolling(false)
         clearInterval(interval)
       }
     }, 2000)
     return () => clearInterval(interval)
-  }, [status?.has_resume, status?.processing_status, fetchStatus, fetchResults])
+  }, [status?.has_resume, status?.processing_status, isPaid, fetchStatus, fetchResults, fetchProfile, fetchMarketComparison])
+
+  // Handle ?subscription=success redirect from Stripe
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('subscription') === 'success') {
+      // Clean URL
+      window.history.replaceState({}, '', '/dashboard')
+      // Start polling for match results
+      fetchStatus()
+    }
+  }, [fetchStatus])
 
   const trackClick = useCallback((matchId: string) => {
     if (clickedRef.current.has(matchId)) return
@@ -88,6 +134,8 @@ export default function DashboardPage() {
     setShowUpload(false)
     setMatches([])
     setSkillsGap(null)
+    setMarketComparison(null)
+    setProfile(null)
     fetchStatus()
   }, [fetchStatus])
 
@@ -117,13 +165,14 @@ export default function DashboardPage() {
     )
   }
 
-  const isProcessing = status && ['pending', 'parsing', 'matching'].includes(status.processing_status)
+  const isParsingProfile = status && ['pending', 'parsing'].includes(status.processing_status)
+  const isProfileReady = status && ['parsed', 'matching_stage1', 'matching_stage2', 'completed'].includes(status.processing_status)
+  const isMatching = status && ['matching_stage1', 'matching_stage2'].includes(status.processing_status)
+  const isComplete = status?.processing_status === 'completed'
   const isFailed = status?.processing_status === 'failed'
 
-  // Split matches by tier, limit counts
   const strongMatches = matches.filter(m => m.match_tier === 'strong').slice(0, MAX_STRONG)
   const goodMatches = matches.filter(m => m.match_tier === 'good').slice(0, MAX_GOOD)
-  const displayMatches = [...strongMatches, ...goodMatches]
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -135,6 +184,7 @@ export default function DashboardPage() {
             <p className="text-2xs font-mono text-tertiary mt-0.5 flex items-center gap-1.5">
               <FileText className="w-3 h-3" />
               {status.file_name} &middot; uploaded {new Date(status.uploaded_at).toLocaleDateString()}
+              {isPaid && <span className="ml-2 px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-2xs font-bold border border-emerald-200">Pro</span>}
             </p>
           )}
         </div>
@@ -152,16 +202,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Processing */}
-      {isProcessing && (
+      {/* Parsing profile */}
+      {isParsingProfile && (
         <div className="card p-8 text-center mb-6">
           <Loader2 className="w-10 h-10 text-zinc-400 animate-spin mx-auto mb-3" />
-          <p className="text-primary font-semibold mb-1">
-            {status.processing_status === 'pending' && 'Preparing your resume...'}
-            {status.processing_status === 'parsing' && 'Analyzing your resume with AI...'}
-            {status.processing_status === 'matching' && 'Matching against jobs...'}
-          </p>
-          <p className="text-tertiary text-sm">This usually takes 30-60 seconds</p>
+          <p className="text-primary font-semibold mb-1">Analyzing your resume...</p>
+          <p className="text-tertiary text-sm">Extracting skills, experience, and background</p>
         </div>
       )}
 
@@ -176,55 +222,118 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Results */}
-      {!isProcessing && !isFailed && status?.processing_status === 'completed' && (
+      {/* Profile ready — show results */}
+      {isProfileReady && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column */}
           <div className="lg:col-span-2 space-y-6">
             {profile && <ProfileCard profile={profile} />}
 
-            {/* Strong Matches */}
-            {strongMatches.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="w-4 h-4 text-emerald-600" />
-                  <h2 className="text-sm font-bold text-primary">Strong Matches</h2>
-                  <span className="text-2xs font-mono text-tertiary">({strongMatches.length})</span>
-                </div>
-                <div className="space-y-2">
-                  {strongMatches.map((m: any) => (
-                    <MatchCard key={m.id || m.jobs?.id} match={m} onTrackClick={trackClick} />
-                  ))}
-                </div>
+            {/* Market Comparison — FREE for all users */}
+            {marketComparison && <MarketComparisonCard data={marketComparison} />}
+
+            {/* Matching in progress (paid users) */}
+            {isMatching && isPaid && (
+              <div className="card p-6 text-center">
+                <Loader2 className="w-8 h-8 text-zinc-400 animate-spin mx-auto mb-3" />
+                <p className="text-primary font-semibold mb-1">
+                  {status.processing_status === 'matching_stage1' ? 'Finding your top matches...' : 'Scanning more jobs in background...'}
+                </p>
+                <p className="text-tertiary text-sm">
+                  {status.processing_status === 'matching_stage1' ? 'This takes about 10 seconds' : 'Results appearing as they\'re found'}
+                </p>
               </div>
             )}
 
-            {/* Good Matches */}
-            {goodMatches.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <Target className="w-4 h-4 text-blue-600" />
-                  <h2 className="text-sm font-bold text-primary">Good Matches</h2>
-                  <span className="text-2xs font-mono text-tertiary">({goodMatches.length})</span>
-                </div>
-                <div className="space-y-2">
-                  {goodMatches.map((m: any) => (
-                    <MatchCard key={m.id || m.jobs?.id} match={m} onTrackClick={trackClick} />
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Matches — paid users see results, free users see subscribe gate */}
+            {isPaid ? (
+              <>
+                {strongMatches.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-emerald-600" />
+                      <h2 className="text-sm font-bold text-primary">Strong Matches</h2>
+                      <span className="text-2xs font-mono text-tertiary">({strongMatches.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {strongMatches.map((m: any) => (
+                        <MatchCard key={m.id || m.jobs?.id} match={m} onTrackClick={trackClick} />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-            {displayMatches.length === 0 && (
-              <div className="card p-6 text-center text-tertiary text-sm">
-                No matches found. Try uploading a different resume.
-              </div>
+                {goodMatches.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="w-4 h-4 text-blue-600" />
+                      <h2 className="text-sm font-bold text-primary">Good Matches</h2>
+                      <span className="text-2xs font-mono text-tertiary">({goodMatches.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {goodMatches.map((m: any) => (
+                        <MatchCard key={m.id || m.jobs?.id} match={m} onTrackClick={trackClick} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {isComplete && matches.length === 0 && (
+                  <div className="card p-6 text-center text-tertiary text-sm">
+                    No matches found. Try uploading a different resume.
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Free user — subscribe gate over fake match placeholders */
+              <SubscribeGate locked={true}>
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Zap className="w-4 h-4 text-emerald-600" />
+                      <h2 className="text-sm font-bold text-primary">Strong Matches</h2>
+                    </div>
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => (
+                        <div key={i} className="card p-4 h-28 bg-zinc-50" />
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="w-4 h-4 text-blue-600" />
+                      <h2 className="text-sm font-bold text-primary">Good Matches</h2>
+                    </div>
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => (
+                        <div key={i} className="card p-4 h-28 bg-zinc-50" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </SubscribeGate>
             )}
           </div>
 
-          {/* Right column — Skills Gap */}
+          {/* Right column — Skills Gap (paid only) */}
           <div className="space-y-6">
-            {skillsGap && <SkillsGapPanel data={skillsGap} />}
+            {isPaid && skillsGap ? (
+              <SkillsGapPanel data={skillsGap} />
+            ) : !isPaid ? (
+              <SubscribeGate locked={true}>
+                <div className="card p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-4 h-4 text-emerald-600" />
+                    <h3 className="text-sm font-semibold text-primary">Skills to Learn</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} className="h-4 bg-zinc-100 rounded" />
+                    ))}
+                  </div>
+                </div>
+              </SubscribeGate>
+            ) : null}
           </div>
         </div>
       )}
@@ -241,8 +350,8 @@ function HowItWorks() {
     <div className="mt-12 grid grid-cols-3 gap-4">
       {[
         { step: '1', title: 'Upload', desc: 'Drop your resume (PDF, DOCX, or MD)' },
-        { step: '2', title: 'AI Matches', desc: 'We match you to the best AI roles' },
-        { step: '3', title: 'Skills Gap', desc: 'See what to learn for your targets' },
+        { step: '2', title: 'AI Analysis', desc: 'We analyze your skills vs market demand' },
+        { step: '3', title: 'Get Matches', desc: 'Subscribe to see your best job matches' },
       ].map(s => (
         <div key={s.step} className="text-center">
           <div className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-600 font-bold text-sm flex items-center justify-center mx-auto mb-2">
@@ -303,6 +412,54 @@ function ProfileCard({ profile }: { profile: any }) {
   )
 }
 
+function MarketComparisonCard({ data }: { data: any }) {
+  return (
+    <div className="card p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <BarChart3 className="w-4 h-4 text-zinc-500" />
+        <h2 className="text-sm font-semibold text-primary">Your Skills vs Market Demand</h2>
+      </div>
+      <p className="text-2xs text-tertiary mb-4">Based on {data.total_jobs} {data.matched_role} positions</p>
+
+      {/* Strengths */}
+      {data.your_strengths?.length > 0 && (
+        <div className="mb-4">
+          <p className="text-2xs font-mono text-emerald-600 font-semibold mb-2">YOUR STRENGTHS</p>
+          <div className="space-y-1.5">
+            {data.your_strengths.slice(0, 6).map((s: any) => (
+              <div key={s.skill} className="flex items-center gap-2">
+                <span className="text-xs text-secondary w-28 truncate">{s.skill}</span>
+                <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                </div>
+                <span className="text-2xs font-mono text-tertiary w-10 text-right">{s.demand_pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Gaps */}
+      {data.your_gaps?.length > 0 && (
+        <div>
+          <p className="text-2xs font-mono text-amber-600 font-semibold mb-2">SKILLS YOU&apos;RE MISSING</p>
+          <div className="space-y-1.5">
+            {data.your_gaps.slice(0, 6).map((s: any) => (
+              <div key={s.skill} className="flex items-center gap-2">
+                <span className="text-xs text-secondary w-28 truncate">{s.skill}</span>
+                <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-amber-400 rounded-full" style={{ width: `${s.demand_pct}%` }} />
+                </div>
+                <span className="text-2xs font-mono text-tertiary w-10 text-right">{s.demand_pct}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: string) => void }) {
   const job = match.jobs
   const company = job?.companies
@@ -315,7 +472,6 @@ function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: str
     <div className="card card-hover p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {/* Title + Company */}
           <Link
             href={`/jobs/${job?.id}`}
             onClick={() => onTrackClick(match.id)}
@@ -331,11 +487,7 @@ function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: str
             {job?.location && <span>{job.location}</span>}
             {salary && <span className="font-mono font-semibold text-primary">{salary}</span>}
           </div>
-
-          {/* Reasoning */}
           <p className="text-2xs text-secondary leading-relaxed mb-2">{match.match_reasoning}</p>
-
-          {/* Skills */}
           <div className="flex flex-wrap gap-1">
             {(match.skills_matched as string[])?.slice(0, 5).map((s: string) => (
               <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">{s}</span>
@@ -345,8 +497,6 @@ function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: str
             ))}
           </div>
         </div>
-
-        {/* Right side: badge + feedback + apply */}
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <MatchBadge tier={match.match_tier} score={match.match_score} />
           <MatchFeedback matchId={match.id} initialFeedback={match.user_feedback} />
@@ -395,7 +545,6 @@ function SkillsGapPanel({ data }: { data: any }) {
           </div>
         </div>
       )}
-
       {data.gaps?.length > 0 && (
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-3">

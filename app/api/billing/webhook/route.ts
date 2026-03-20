@@ -41,6 +41,62 @@ export async function POST(req: NextRequest) {
       break
     }
 
+    case 'invoice.paid': {
+      // Also handle invoice.paid as a fallback — some Stripe flows
+      // send this instead of checkout.session.completed
+      const invoice = event.data.object as Stripe.Invoice
+      const customerId = typeof invoice.customer === 'string' ? invoice.customer : null
+      if (!customerId) break
+
+      // Check if user already active (avoid duplicate triggers)
+      const { data: existing } = await db.from('user_profiles')
+        .select('id, subscription_status')
+        .eq('stripe_customer_id', customerId)
+        .single()
+
+      if (existing) {
+        // Already have customer linked — just ensure active
+        if (existing.subscription_status !== 'active') {
+          await db.from('user_profiles').update({
+            subscription_status: 'active',
+            subscription_expires_at: null,
+          }).eq('stripe_customer_id', customerId)
+
+          // Trigger matching
+          const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/resume/process`
+          fetch(processUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: existing.id, mode: 'stage1' }),
+          }).catch(err => console.error('Failed to trigger matching:', err))
+        }
+      } else {
+        // First payment — try to find user by email from invoice
+        const customerEmail = (invoice as any).customer_email
+        if (customerEmail) {
+          const { data: user } = await db.from('user_profiles')
+            .select('id')
+            .eq('email', customerEmail)
+            .single()
+          if (user) {
+            await db.from('user_profiles').update({
+              stripe_customer_id: customerId,
+              subscription_status: 'active',
+              subscription_expires_at: null,
+            }).eq('id', user.id)
+
+            const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/resume/process`
+            fetch(processUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: user.id, mode: 'stage1' }),
+            }).catch(err => console.error('Failed to trigger matching:', err))
+          }
+        }
+      }
+      break
+    }
+
     case 'customer.subscription.updated': {
       const sub = event.data.object as Stripe.Subscription
       const customerId = sub.customer as string

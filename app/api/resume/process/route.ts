@@ -139,81 +139,82 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Update status and trigger stage 2 in background
-      await db.from('user_resumes').update({ processing_status: 'matching_stage2' }).eq('user_id', user_id)
+      // Stage 1 done — mark as completed so user can see results immediately
+      await db.from('user_resumes').update({ processing_status: 'completed' }).eq('user_id', user_id)
 
+      // Trigger stage 2 in background for more matches (best effort, won't break if it fails)
       const matchedJobIds = topJobs.map(t => t.job.id)
       const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
       fetch(processUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id, mode: 'stage2', exclude_job_ids: matchedJobIds }),
-      }).catch(err => console.error('Failed to trigger stage 2:', err))
+      }).catch(err => console.error('Stage 2 trigger failed (non-fatal):', err))
 
-      return NextResponse.json({ status: 'matching_stage2', matches: totalMatches })
+      return NextResponse.json({ status: 'completed', matches: totalMatches })
     }
 
-    // === STAGE 2: Background remaining jobs ===
+    // === STAGE 2: Background remaining jobs (best effort — never sets 'failed') ===
     if (mode === 'stage2') {
-      const profile = resume.parsed_profile
-      if (!profile) return NextResponse.json({ error: 'No parsed profile' }, { status: 400 })
+      try {
+        const profile = resume.parsed_profile
+        if (!profile) return NextResponse.json({ status: 'completed', matches: 0 })
 
-      const body = await req.clone().json().catch(() => ({}))
-      const excludeIds: string[] = body.exclude_job_ids || []
+        const body = await req.clone().json().catch(() => ({}))
+        const excludeIds: string[] = body.exclude_job_ids || []
 
-      let query = db
-        .from('jobs')
-        .select('id, title, description, location, role_category, companies(name, funding_stage)')
-        .eq('is_active', true)
+        const { data: jobs } = await db
+          .from('jobs')
+          .select('id, title, description, location, role_category, companies(name, funding_stage)')
+          .eq('is_active', true)
 
-      const { data: jobs } = await query
+        if (!jobs?.length) return NextResponse.json({ status: 'completed', matches: 0 })
 
-      if (!jobs?.length) {
-        await db.from('user_resumes').update({ processing_status: 'completed' }).eq('user_id', user_id)
+        const remainingJobs = jobs.filter(j => !excludeIds.includes(j.id))
+
+        const jobsForMatching: JobForMatching[] = remainingJobs.map(j => ({
+          id: j.id,
+          title: j.title,
+          description: j.description,
+          company_name: (j.companies as any)?.name || 'Unknown',
+          funding_stage: (j.companies as any)?.funding_stage || null,
+          location: j.location,
+          role_category: j.role_category,
+        }))
+
+        let totalMatches = 0
+        for (let i = 0; i < jobsForMatching.length; i += BATCH_SIZE) {
+          const batch = jobsForMatching.slice(i, i + BATCH_SIZE)
+          try {
+            const results = await matchJobsBatch(profile, batch)
+            for (const match of results) {
+              if (match.match_score >= 40) {
+                await db.from('user_job_matches').upsert({
+                  user_id,
+                  job_id: match.job_id,
+                  match_score: match.match_score,
+                  match_tier: match.match_tier,
+                  match_reasoning: match.match_reasoning,
+                  skills_matched: match.skills_matched,
+                  skills_missing: match.skills_missing,
+                  dimension_scores: match.dimension_scores || null,
+                  refreshed_at: new Date().toISOString(),
+                }, { onConflict: 'user_id,job_id' })
+                totalMatches++
+              }
+            }
+          } catch (batchError) {
+            console.error(`Stage 2 batch ${i / BATCH_SIZE} failed:`, batchError)
+          }
+        }
+
+        return NextResponse.json({ status: 'completed', matches: totalMatches })
+      } catch (error: any) {
+        // Stage 2 is best-effort — log error but DON'T set status to 'failed'
+        // Stage 1 results are already usable
+        console.error('Stage 2 failed (non-fatal):', error.message)
         return NextResponse.json({ status: 'completed', matches: 0 })
       }
-
-      // Filter out already-matched jobs from stage 1
-      const remainingJobs = jobs.filter(j => !excludeIds.includes(j.id))
-
-      const jobsForMatching: JobForMatching[] = remainingJobs.map(j => ({
-        id: j.id,
-        title: j.title,
-        description: j.description,
-        company_name: (j.companies as any)?.name || 'Unknown',
-        funding_stage: (j.companies as any)?.funding_stage || null,
-        location: j.location,
-        role_category: j.role_category,
-      }))
-
-      let totalMatches = 0
-      for (let i = 0; i < jobsForMatching.length; i += BATCH_SIZE) {
-        const batch = jobsForMatching.slice(i, i + BATCH_SIZE)
-        try {
-          const results = await matchJobsBatch(profile, batch)
-          for (const match of results) {
-            if (match.match_score >= 40) {
-              await db.from('user_job_matches').upsert({
-                user_id,
-                job_id: match.job_id,
-                match_score: match.match_score,
-                match_tier: match.match_tier,
-                match_reasoning: match.match_reasoning,
-                skills_matched: match.skills_matched,
-                skills_missing: match.skills_missing,
-                dimension_scores: match.dimension_scores || null,
-                refreshed_at: new Date().toISOString(),
-              }, { onConflict: 'user_id,job_id' })
-              totalMatches++
-            }
-          }
-        } catch (batchError) {
-          console.error(`Stage 2 batch ${i / BATCH_SIZE} failed:`, batchError)
-        }
-      }
-
-      await db.from('user_resumes').update({ processing_status: 'completed' }).eq('user_id', user_id)
-      return NextResponse.json({ status: 'completed', matches: totalMatches })
     }
 
     // === LEGACY FULL MODE (backward compat) ===

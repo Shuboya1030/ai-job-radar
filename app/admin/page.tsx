@@ -445,6 +445,26 @@ function SubscriberHealthPanel({ password }: { password: string }) {
         </div>
       </div>
 
+      {/* Timing metrics */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Avg Parse Time</p>
+          <p className="text-2xl font-mono font-bold text-primary">{m.avg_parse_seconds ? m.avg_parse_seconds + 's' : '—'}</p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Avg Match Time</p>
+          <p className={`text-2xl font-mono font-bold ${m.avg_match_seconds > 120 ? 'text-red-500' : m.avg_match_seconds > 60 ? 'text-amber-500' : 'text-emerald-600'}`}>
+            {m.avg_match_seconds ? m.avg_match_seconds + 's' : '—'}
+          </p>
+        </div>
+        <div className="card p-4 text-center">
+          <p className="text-2xs font-mono text-tertiary mb-1">Max Match Time</p>
+          <p className={`text-2xl font-mono font-bold ${m.max_match_seconds > 180 ? 'text-red-500' : 'text-primary'}`}>
+            {m.max_match_seconds ? m.max_match_seconds + 's' : '—'}
+          </p>
+        </div>
+      </div>
+
       {/* Conversion funnel */}
       <div className="card p-5">
         <h2 className="section-label mb-4">Conversion Funnel</h2>
@@ -478,6 +498,8 @@ function SubscriberHealthPanel({ password }: { password: string }) {
                 <th className="text-left py-2 font-mono text-tertiary">Resume</th>
                 <th className="text-right py-2 font-mono text-tertiary">Matches</th>
                 <th className="text-right py-2 font-mono text-tertiary">Retries</th>
+                <th className="text-right py-2 font-mono text-tertiary">Parse</th>
+                <th className="text-right py-2 font-mono text-tertiary">Match</th>
                 <th className="text-left py-2 font-mono text-tertiary">Joined</th>
               </tr>
             </thead>
@@ -515,6 +537,12 @@ function SubscriberHealthPanel({ password }: { password: string }) {
                   <td className="py-2 text-right font-mono">
                     <span className={u.resume?.match_retry_count > 0 ? 'text-amber-600' : 'text-faint'}>
                       {u.resume?.match_retry_count || 0}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right font-mono text-tertiary">{u.resume?.parse_duration_seconds ? u.resume.parse_duration_seconds + 's' : '—'}</td>
+                  <td className="py-2 text-right font-mono">
+                    <span className={u.resume?.match_duration_seconds > 120 ? 'text-red-500' : 'text-tertiary'}>
+                      {u.resume?.match_duration_seconds ? u.resume.match_duration_seconds + 's' : '—'}
                     </span>
                   </td>
                   <td className="py-2 font-mono text-tertiary">{u.created_at?.split('T')[0]}</td>

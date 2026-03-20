@@ -447,7 +447,8 @@ function ProcessingProgress({ status }: { status: string }) {
       </div>
 
       <p className="text-2xs text-faint mt-4 text-center">
-        We scan 600+ jobs at funded AI startups to find your best matches — quality takes a moment
+        We scan 600+ jobs at funded AI startups to find your best matches.<br />
+        This usually takes 3–5 minutes — feel free to grab a coffee, we&apos;ll have your results ready when you come back.
       </p>
     </div>
   )

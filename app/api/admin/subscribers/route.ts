@@ -15,10 +15,10 @@ export async function GET(req: NextRequest) {
     .select('id, email, name, subscription_status, stripe_customer_id, subscription_expires_at, created_at')
     .order('created_at', { ascending: false })
 
-  // All resumes with status
+  // All resumes with status + timing
   const { data: resumes } = await db
     .from('user_resumes')
-    .select('user_id, processing_status, error_message, match_retry_count, file_name, uploaded_at')
+    .select('user_id, processing_status, error_message, match_retry_count, file_name, uploaded_at, parse_duration_seconds, match_duration_seconds')
 
   // Match counts per user
   const { data: matchCounts } = await db
@@ -58,6 +58,13 @@ export async function GET(req: NextRequest) {
   const signupToResumeRate = totalUsers > 0 ? Math.round((usersWithResume / totalUsers) * 100) : 0
   const resumeToPayRate = usersWithResume > 0 ? Math.round((activeSubscribers / usersWithResume) * 100) : 0
 
+  // Timing metrics
+  const parseTimes = resumes?.filter(r => r.parse_duration_seconds).map(r => r.parse_duration_seconds) || []
+  const matchTimes = resumes?.filter(r => r.match_duration_seconds).map(r => r.match_duration_seconds) || []
+  const avgParseTime = parseTimes.length > 0 ? Math.round(parseTimes.reduce((a: number, b: number) => a + b, 0) / parseTimes.length) : null
+  const avgMatchTime = matchTimes.length > 0 ? Math.round(matchTimes.reduce((a: number, b: number) => a + b, 0) / matchTimes.length) : null
+  const maxMatchTime = matchTimes.length > 0 ? Math.max(...matchTimes) : null
+
   return NextResponse.json({
     metrics: {
       total_users: totalUsers,
@@ -70,6 +77,9 @@ export async function GET(req: NextRequest) {
       resume_to_pay_rate: resumeToPayRate,
       stuck_paid_users: paidStuck.length,
       failed_paid_users: paidFailed.length,
+      avg_parse_seconds: avgParseTime,
+      avg_match_seconds: avgMatchTime,
+      max_match_seconds: maxMatchTime,
     },
     subscribers,
   })

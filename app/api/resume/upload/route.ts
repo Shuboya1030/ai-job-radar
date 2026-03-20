@@ -83,13 +83,13 @@ export async function POST(req: NextRequest) {
   // Delete old match results
   await db.from('user_job_matches').delete().eq('user_id', user.id)
 
-  // TEMPORARY: paywall disabled — trigger full parse + stage1 matching for all users
+  // TEMPORARY: paywall disabled — parse then auto-trigger matching
   // TODO: restore to parse_only when Stripe is active again
   const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
   fetch(processUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: user.id, mode: 'stage1' }),
+    body: JSON.stringify({ user_id: user.id, mode: 'parse_then_match' }),
   }).catch(err => console.error('Failed to trigger processing:', err))
 
   return NextResponse.json({ status: 'processing' }, { status: 202 })

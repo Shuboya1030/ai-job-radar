@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
   const { user_id, mode } = await req.json()
   if (!user_id) return NextResponse.json({ error: 'Missing user_id' }, { status: 400 })
 
+  const startTime = Date.now()
   const db = createSupabaseServerClient()
 
   try {
@@ -22,6 +23,37 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!resume) return NextResponse.json({ error: 'No resume found' }, { status: 404 })
+
+    // === PARSE THEN MATCH MODE ===
+    // Parse profile, then auto-trigger stage1 matching (used when paywall disabled)
+    if (mode === 'parse_then_match') {
+      await db.from('user_resumes').update({ processing_status: 'parsing' }).eq('user_id', user_id)
+
+      const { data: fileData, error: downloadError } = await db.storage
+        .from('resumes')
+        .download(resume.file_url)
+      if (downloadError || !fileData) throw new Error('Failed to download resume file')
+
+      const buffer = Buffer.from(await fileData.arrayBuffer())
+      const rawText = await extractText(buffer, resume.file_type as any)
+      await db.from('user_resumes').update({ raw_text: rawText }).eq('user_id', user_id)
+
+      const profile = await parseResume(rawText)
+      await db.from('user_resumes').update({
+        parsed_profile: profile,
+        processing_status: 'matching_stage1',
+      }).eq('user_id', user_id)
+
+      // Now trigger stage1 matching with the freshly parsed profile
+      const processUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
+      fetch(processUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, mode: 'stage1' }),
+      }).catch(err => console.error('Failed to trigger stage1:', err))
+
+      return NextResponse.json({ status: 'matching_stage1' })
+    }
 
     // === PARSE ONLY MODE ===
     // Used by upload route — only extract text + parse profile, no matching
@@ -38,12 +70,14 @@ export async function POST(req: NextRequest) {
       await db.from('user_resumes').update({ raw_text: rawText }).eq('user_id', user_id)
 
       const profile = await parseResume(rawText)
+      const parseDuration = Math.round((Date.now() - startTime) / 1000)
       await db.from('user_resumes').update({
         parsed_profile: profile,
         processing_status: 'parsed',
+        parse_duration_seconds: parseDuration,
       }).eq('user_id', user_id)
 
-      return NextResponse.json({ status: 'parsed', profile })
+      return NextResponse.json({ status: 'parsed', profile, duration_seconds: parseDuration })
     }
 
     // === STAGE 1: Fast pre-filtered matching (~10s) ===
@@ -140,7 +174,11 @@ export async function POST(req: NextRequest) {
       }
 
       // Stage 1 done — mark as completed so user can see results immediately
-      await db.from('user_resumes').update({ processing_status: 'completed' }).eq('user_id', user_id)
+      const matchDuration = Math.round((Date.now() - startTime) / 1000)
+      await db.from('user_resumes').update({
+        processing_status: 'completed',
+        match_duration_seconds: matchDuration,
+      }).eq('user_id', user_id)
 
       // Trigger stage 2 in background for more matches (best effort, won't break if it fails)
       const matchedJobIds = topJobs.map(t => t.job.id)

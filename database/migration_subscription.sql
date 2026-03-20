@@ -12,6 +12,10 @@ CREATE INDEX IF NOT EXISTS idx_user_profiles_subscription
 -- Retry counter for matching failures
 ALTER TABLE user_resumes ADD COLUMN IF NOT EXISTS match_retry_count INTEGER DEFAULT 0;
 
+-- Timing metrics
+ALTER TABLE user_resumes ADD COLUMN IF NOT EXISTS parse_duration_seconds INTEGER;
+ALTER TABLE user_resumes ADD COLUMN IF NOT EXISTS match_duration_seconds INTEGER;
+
 -- Update processing_status constraint to support new statuses
 ALTER TABLE user_resumes DROP CONSTRAINT IF EXISTS user_resumes_processing_status_check;
 ALTER TABLE user_resumes ADD CONSTRAINT user_resumes_processing_status_check

@@ -25,8 +25,10 @@ export default function DashboardPage() {
   const [showUpload, setShowUpload] = useState(false)
   const clickedRef = useRef(new Set<string>())
 
-  // Use subscription status from status API (more reliable than auth provider async fetch)
-  const isPaid = status?.subscription_status === 'active' || subscriptionStatus === 'active'
+  // TEMPORARY: paywall disabled while Stripe identity verification is pending
+  // TODO: restore when Stripe is active again:
+  // const isPaid = status?.subscription_status === 'active' || subscriptionStatus === 'active'
+  const isPaid = true
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch('/api/resume/status')

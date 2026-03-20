@@ -95,19 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut({ scope: 'global' })
+    try { await supabase.auth.signOut({ scope: 'global' }) } catch {}
     setUser(null)
     setSession(null)
-    // Clear Supabase tokens from localStorage
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('sb-')) localStorage.removeItem(key)
-    })
-    // Clear Supabase cookies
+    // Clear ALL cookies (Supabase splits auth tokens across multiple cookie chunks)
     document.cookie.split(';').forEach(c => {
       const name = c.trim().split('=')[0]
-      if (name.startsWith('sb-')) {
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
-      }
+      if (!name) return
+      // Clear with multiple path/domain combinations to ensure removal
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=${window.location.hostname}`
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.${window.location.hostname}`
+    })
+    // Clear localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('sb-')) localStorage.removeItem(key)
     })
     window.location.href = '/'
   }

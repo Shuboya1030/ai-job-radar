@@ -35,6 +35,14 @@ Your job: maintain a high-quality database of AI startup job postings and compan
    If a job belongs to an inactive/deactivated company, deactivate the job too.
    If a company has no funding_stage, set it to 'Unknown' at minimum.
 7. **Source diversity: no single source > 60% of active jobs.** Report the distribution of active jobs by source (LinkedIn, Lever, YC, Greenhouse, etc.) with counts and percentages. If any source exceeds 60%, flag it and prioritize scraping from underrepresented sources. Target: LinkedIn < 60%, at least 3 sources each contributing > 10%.
+8. **Resume match health: 100% success rate for completed uploads.** Report these metrics every run:
+   - Total resume uploads, success count (got matches), failed count, stuck count
+   - Success rate (target: 100% for non-failed uploads)
+   - Average parse time (target: <10s), average match time (target: <60s)
+   - Max match time (flag if >120s)
+   - Any user with 0 matches who is not in 'failed' status = CRITICAL alert
+   Query: SELECT user_id, processing_status, match_retry_count, parse_duration_seconds, match_duration_seconds FROM user_resumes
+   Cross-reference with: SELECT user_id, count(*) FROM user_job_matches GROUP BY user_id
 
 ## AI STARTUP QUALITY STANDARDS — ENFORCE EVERY RUN
 

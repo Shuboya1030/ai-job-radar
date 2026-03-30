@@ -82,7 +82,7 @@ def run_pipeline(skip_linkedin=False, skip_yc=False, skip_careers=False):
         print("-" * 40)
         try:
             from career_page_scraper import scrape_career_pages
-            career_jobs = scrape_career_pages(supabase, max_companies=200)
+            career_jobs = scrape_career_pages(supabase, max_companies=100)
             if career_jobs:
                 total_scraped += len(career_jobs)
                 # Group by (source, role) since jobs come from different ATS platforms

@@ -270,7 +270,7 @@ def _try_ashby(company_name):
     return jobs
 
 
-def scrape_career_pages(supabase, max_companies=200):
+def scrape_career_pages(supabase, max_companies=100):
     """For known companies, try to find AI-related jobs on their career pages."""
     print("\n[careers] Scanning startup career pages...")
 

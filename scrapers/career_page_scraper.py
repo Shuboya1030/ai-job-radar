@@ -31,10 +31,23 @@ def _fetch_page(url):
 
 
 def _try_greenhouse(company_name):
-    """Find jobs on Greenhouse — fetches listing page then each job detail."""
+    """Find jobs on Greenhouse — uses JSON API for reliability, then HTML fallback."""
     slug = company_name.lower().replace(" ", "").replace(".", "").replace(",", "")
-    list_url = f"https://boards.greenhouse.io/{slug}"
 
+    # Try JSON API first (more reliable than HTML scraping)
+    api_url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+    try:
+        resp = requests.get(api_url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            api_jobs = data.get("jobs", [])
+            if api_jobs:
+                return _parse_greenhouse_api(api_jobs, company_name, slug)
+    except Exception:
+        pass
+
+    # Fallback to HTML scraping
+    list_url = f"https://boards.greenhouse.io/{slug}"
     soup = _fetch_page(list_url)
     if not soup:
         return []
@@ -52,7 +65,6 @@ def _try_greenhouse(company_name):
         if not any(kw in title_lower for kw in AI_KEYWORDS):
             continue
 
-        # Build full detail URL
         if link.startswith("/"):
             detail_url = f"https://boards.greenhouse.io{link}"
         elif link.startswith("http"):
@@ -60,22 +72,16 @@ def _try_greenhouse(company_name):
         else:
             continue
 
-        # Fetch detail page for JD + apply URL
         detail_soup = _fetch_page(detail_url)
         description = ""
-        apply_url = detail_url  # Default: the detail page IS the apply page
+        apply_url = detail_url
 
         if detail_soup:
-            # Extract description
             content = detail_soup.select_one("#content, .content, [class*='job-description'], [class*='body']")
             if content:
                 description = content.get_text(separator="\n", strip=True)[:5000]
-
-            # Extract location
             location_el = detail_soup.select_one(".location, [class*='location']")
             location = location_el.get_text(strip=True) if location_el else None
-
-            # Find apply button/link
             apply_el = detail_soup.select_one("a[href*='apply'], a[class*='apply'], #apply_button, a[data-job-id]")
             if apply_el and apply_el.get("href"):
                 href = apply_el["href"]
@@ -86,7 +92,6 @@ def _try_greenhouse(company_name):
         else:
             location = None
 
-        # Skip if still no real description
         if len(description) < 50:
             description = f"View full job description at {detail_url}"
 
@@ -100,8 +105,45 @@ def _try_greenhouse(company_name):
             "apply_url": apply_url,
             "_source": "Greenhouse",
         })
+        time.sleep(0.3)
 
-        time.sleep(0.3)  # Be polite
+    return jobs
+
+
+def _parse_greenhouse_api(api_jobs, company_name, slug):
+    """Parse Greenhouse JSON API response into job dicts."""
+    jobs = []
+    for j in api_jobs:
+        title = j.get("title", "")
+        title_lower = title.lower()
+        if not any(kw in title_lower for kw in AI_KEYWORDS):
+            continue
+
+        job_id = j.get("id")
+        location = j.get("location", {}).get("name")
+        content = j.get("content", "")
+        # Strip HTML tags from content
+        if content:
+            description = BeautifulSoup(content, "html.parser").get_text(separator="\n", strip=True)[:5000]
+        else:
+            description = ""
+
+        # Greenhouse apply URL format
+        apply_url = f"https://boards.greenhouse.io/{slug}/jobs/{job_id}#app"
+
+        if len(description) < 50:
+            description = f"View full job description at https://boards.greenhouse.io/{slug}/jobs/{job_id}"
+
+        jobs.append({
+            "JobId": f"gh-{slug}-{job_id}",
+            "JobTitle": title,
+            "CompanyName": company_name,
+            "CompanyUrl": f"https://boards.greenhouse.io/{slug}",
+            "Location": location,
+            "JobDescription": description,
+            "apply_url": apply_url,
+            "_source": "Greenhouse",
+        })
 
     return jobs
 
@@ -228,7 +270,7 @@ def _try_ashby(company_name):
     return jobs
 
 
-def scrape_career_pages(supabase, max_companies=50):
+def scrape_career_pages(supabase, max_companies=200):
     """For known companies, try to find AI-related jobs on their career pages."""
     print("\n[careers] Scanning startup career pages...")
 

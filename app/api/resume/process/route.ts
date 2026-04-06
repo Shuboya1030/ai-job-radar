@@ -122,21 +122,89 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Now run company matching inline (same request)
+      let totalCompanyMatches = 0
+      try {
+        await db.from('user_company_matches').delete().eq('user_id', user_id)
+
+        const { data: allCompanies } = await db
+          .from('companies')
+          .select('id, name, industry, product_description, funding_stage, employee_range')
+          .eq('is_active', true)
+
+        if (allCompanies?.length) {
+          // Get job skills per company
+          const { data: allJobsForCo } = await db
+            .from('jobs')
+            .select('company_id, hard_skills, tools')
+            .eq('is_active', true)
+
+          const coSkills: Record<string, Set<string>> = {}
+          const coJobCount: Record<string, number> = {}
+          const pSkills = (v: any): string[] => {
+            if (!v) return []
+            const arr = Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v) } catch { return [] } })() : [])
+            return arr.map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean)
+          }
+          for (const j of (allJobsForCo || []) as any[]) {
+            coJobCount[j.company_id] = (coJobCount[j.company_id] || 0) + 1
+            if (!coSkills[j.company_id]) coSkills[j.company_id] = new Set()
+            for (const s of pSkills(j.hard_skills)) coSkills[j.company_id].add(s)
+            for (const s of pSkills(j.tools)) coSkills[j.company_id].add(s)
+          }
+
+          // Pre-filter top 50 companies
+          const userInd = (profile.industries || []).map((s: string) => s.toLowerCase())
+          const scored = allCompanies.map(c => {
+            let ps = 0
+            const sk = coSkills[c.id] ? [...coSkills[c.id]] : []
+            if (c.industry && userInd.some((ui: string) => c.industry!.toLowerCase().includes(ui))) ps += 10
+            for (const us of userSkills) {
+              if (sk.some(cs => cs.toLowerCase().includes(us) || us.includes(cs.toLowerCase()))) ps++
+            }
+            if (c.product_description && c.product_description.length > 20) ps += 3
+            return { co: c, ps, sk, jc: coJobCount[c.id] || 0 }
+          })
+          scored.sort((a, b) => b.ps - a.ps)
+          const top50 = scored.slice(0, 50)
+
+          const coForMatch: CompanyForMatching[] = top50.map(({ co: c, sk, jc }) => ({
+            id: c.id, name: c.name, industry: c.industry,
+            product_description: c.product_description, funding_stage: c.funding_stage,
+            employee_range: c.employee_range, aggregated_skills: sk, open_job_count: jc,
+          }))
+
+          for (let i = 0; i < coForMatch.length; i += 10) {
+            const batch = coForMatch.slice(i, i + 10)
+            try {
+              const results = await matchCompaniesBatch(profile, batch)
+              for (const m of results) {
+                let score = m.match_score
+                const ci = top50.find(t => t.co.id === m.company_id)
+                if ((ci?.jc || 0) > 0) score = Math.min(100, score + 15)
+                const tier = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'stretch'
+                if (score >= 40) {
+                  await db.from('user_company_matches').upsert({
+                    user_id, company_id: m.company_id, match_score: score, match_tier: tier,
+                    match_reasoning: m.match_reasoning, skills_matched: m.skills_matched,
+                    skills_missing: m.skills_missing, has_open_jobs: (ci?.jc || 0) > 0,
+                    open_job_count: ci?.jc || 0,
+                  }, { onConflict: 'user_id,company_id' })
+                  totalCompanyMatches++
+                }
+              }
+            } catch (e) { console.error('Company match batch failed:', e) }
+          }
+        }
+      } catch (e) { console.error('Company matching failed (non-fatal):', e) }
+
       const matchDuration = Math.round((Date.now() - startTime) / 1000)
       await db.from('user_resumes').update({
         processing_status: 'completed',
         match_duration_seconds: matchDuration,
       }).eq('user_id', user_id)
 
-      // Also trigger company matching (fire-and-forget, non-blocking)
-      const companyMatchUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
-      fetch(companyMatchUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id, mode: 'match_companies' }),
-      }).catch(err => console.error('Company matching trigger failed (non-fatal):', err))
-
-      return NextResponse.json({ status: 'completed', matches: totalMatches, duration_seconds: matchDuration })
+      return NextResponse.json({ status: 'completed', matches: totalMatches, company_matches: totalCompanyMatches, duration_seconds: matchDuration })
     }
 
     // === MATCH COMPANIES MODE ===

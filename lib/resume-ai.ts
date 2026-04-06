@@ -174,3 +174,78 @@ Only include jobs scoring >= 40.` }
     return []
   }
 }
+
+// --- Company Matching ---
+
+export interface CompanyForMatching {
+  id: string
+  name: string
+  industry: string | null
+  product_description: string | null
+  funding_stage: string | null
+  employee_range: string | null
+  aggregated_skills: string[]
+  open_job_count: number
+}
+
+export interface CompanyMatchResult {
+  company_id: string
+  match_score: number
+  match_tier: 'strong' | 'good' | 'stretch'
+  match_reasoning: string
+  skills_matched: string[]
+  skills_missing: string[]
+}
+
+export async function matchCompaniesBatch(
+  profile: ParsedProfile,
+  companies: CompanyForMatching[]
+): Promise<CompanyMatchResult[]> {
+  const companyList = companies.map((c, i) =>
+    `[${i}] ID:${c.id} | ${c.name} | Industry: ${c.industry || 'Unknown'} | ${c.funding_stage || 'Unknown'} | ${c.employee_range || '?'} employees | ${c.open_job_count} open jobs | Skills: ${c.aggregated_skills.slice(0, 15).join(', ') || 'unknown'} | ${(c.product_description || '').slice(0, 200)}`
+  ).join('\n')
+
+  const response = await openai.chat.completions.create({
+    model: MODEL,
+    max_tokens: 4000,
+    response_format: { type: 'json_object' },
+    messages: [
+      { role: 'system', content: 'You are a company-candidate matching engine. Return ONLY valid JSON. Always wrap results in {"matches": [...]}.' },
+      { role: 'user', content: `Score how well this candidate would fit at each company.
+
+CANDIDATE PROFILE:
+- Skills: ${profile.skills.join(', ')}
+- Titles: ${profile.job_titles.join(', ')}
+- Experience: ${profile.experience_years || 'unknown'} years
+- Industries: ${profile.industries.join(', ')}
+- Summary: ${profile.summary}
+
+COMPANIES TO MATCH:
+${companyList}
+
+SCORING DIMENSIONS:
+- Industry/domain fit (0-50 pts): Does the candidate's background align with what this company does?
+- Skills relevance (0-50 pts): Does the candidate have skills this company likely needs (based on their tech stack, job postings, product)?
+
+Total = sum (0-100).
+- 80-100 = strong match
+- 60-79 = good match
+- 40-59 = stretch
+- Below 40 = exclude
+
+Return JSON: {"matches": [{"company_id":"uuid","match_score":85,"match_tier":"strong","match_reasoning":"reason","skills_matched":["Python"],"skills_missing":["K8s"]}]}
+
+Only include companies scoring >= 40.` }
+    ],
+  })
+
+  const text = response.choices[0]?.message?.content || '{"matches":[]}'
+  try {
+    const parsed = JSON.parse(text)
+    const results = Array.isArray(parsed) ? parsed : (parsed.matches || [])
+    return results as CompanyMatchResult[]
+  } catch {
+    console.error('Failed to parse company match results:', text.slice(0, 200))
+    return []
+  }
+}

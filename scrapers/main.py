@@ -109,6 +109,16 @@ def run_pipeline(skip_linkedin=False, skip_yc=False, skip_careers=False):
     except Exception as e:
         print(f"  ERROR: Company discovery failed: {e}")
 
+    # ─── NEWS: AI Startup News Scraper ─────────────────────────
+    print("\n" + "-" * 40)
+    print("  NEWS: AI Startup News Scraper")
+    print("-" * 40)
+    try:
+        from news_scraper import scrape_news
+        scrape_news(supabase)
+    except Exception as e:
+        print(f"  ERROR: News scraper failed: {e}")
+
     # ─── Cross-Source Dedup ─────────────────────────────────────
     print("\n" + "-" * 40)
     print("  DEDUP: Cross-source deduplication")

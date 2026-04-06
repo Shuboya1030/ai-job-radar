@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { extractText } from '@/lib/resume-parser'
-import { parseResume, matchJobsBatch, JobForMatching } from '@/lib/resume-ai'
+import { parseResume, matchJobsBatch, JobForMatching, matchCompaniesBatch, CompanyForMatching } from '@/lib/resume-ai'
 
 export const maxDuration = 120
 
@@ -128,7 +128,138 @@ export async function POST(req: NextRequest) {
         match_duration_seconds: matchDuration,
       }).eq('user_id', user_id)
 
+      // Also trigger company matching (fire-and-forget, non-blocking)
+      const companyMatchUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/resume/process`
+      fetch(companyMatchUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id, mode: 'match_companies' }),
+      }).catch(err => console.error('Company matching trigger failed (non-fatal):', err))
+
       return NextResponse.json({ status: 'completed', matches: totalMatches, duration_seconds: matchDuration })
+    }
+
+    // === MATCH COMPANIES MODE ===
+    // Matches user profile against all active companies (not just jobs)
+    if (mode === 'match_companies') {
+      const profile = resume.parsed_profile
+      if (!profile) return NextResponse.json({ error: 'No parsed profile' }, { status: 400 })
+
+      // Delete old company matches
+      await db.from('user_company_matches').delete().eq('user_id', user_id)
+
+      // Get all active companies
+      const { data: companies } = await db
+        .from('companies')
+        .select('id, name, industry, product_description, funding_stage, employee_range, website')
+        .eq('is_active', true)
+
+      if (!companies?.length) {
+        return NextResponse.json({ status: 'completed', company_matches: 0 })
+      }
+
+      // Get job counts + aggregated skills per company
+      const { data: allJobs } = await db
+        .from('jobs')
+        .select('company_id, hard_skills, tools')
+        .eq('is_active', true)
+
+      const companyJobCounts: Record<string, number> = {}
+      const companySkills: Record<string, Set<string>> = {}
+
+      for (const j of (allJobs || []) as any[]) {
+        const cid = j.company_id
+        companyJobCounts[cid] = (companyJobCounts[cid] || 0) + 1
+        if (!companySkills[cid]) companySkills[cid] = new Set()
+
+        const parseSkillArr = (v: any): string[] => {
+          if (!v) return []
+          const arr = Array.isArray(v) ? v : (typeof v === 'string' ? (() => { try { return JSON.parse(v) } catch { return [] } })() : [])
+          return arr.map((s: any) => typeof s === 'string' ? s : s?.name || '').filter(Boolean)
+        }
+
+        for (const s of parseSkillArr(j.hard_skills)) companySkills[cid].add(s)
+        for (const s of parseSkillArr(j.tools)) companySkills[cid].add(s)
+      }
+
+      // Pre-filter: companies with skill overlap or matching industry
+      const userSkills = (profile.skills || []).map((s: string) => s.toLowerCase())
+      const userIndustries = (profile.industries || []).map((s: string) => s.toLowerCase())
+
+      const scoredCompanies = companies.map(c => {
+        let preScore = 0
+        const skills = companySkills[c.id] ? [...companySkills[c.id]] : []
+        const skillsLower = skills.map(s => s.toLowerCase())
+
+        // Industry overlap
+        if (c.industry && userIndustries.some((ui: string) => c.industry!.toLowerCase().includes(ui) || ui.includes(c.industry!.toLowerCase()))) {
+          preScore += 10
+        }
+
+        // Skill overlap
+        for (const us of userSkills) {
+          if (skillsLower.some(cs => cs.includes(us) || us.includes(cs))) preScore++
+        }
+
+        // Has product description (more matchable)
+        if (c.product_description && c.product_description.length > 20) preScore += 3
+
+        return { company: c, preScore, skills, jobCount: companyJobCounts[c.id] || 0 }
+      })
+
+      scoredCompanies.sort((a, b) => b.preScore - a.preScore)
+      const topCompanies = scoredCompanies.slice(0, 100) // Top 100 for AI matching
+
+      const companiesForMatching: CompanyForMatching[] = topCompanies.map(({ company: c, skills, jobCount }) => ({
+        id: c.id,
+        name: c.name,
+        industry: c.industry,
+        product_description: c.product_description,
+        funding_stage: c.funding_stage,
+        employee_range: c.employee_range,
+        aggregated_skills: skills,
+        open_job_count: jobCount,
+      }))
+
+      // Match in batches of 10 (companies have more context than jobs)
+      const COMPANY_BATCH = 10
+      let totalCompanyMatches = 0
+
+      for (let i = 0; i < companiesForMatching.length; i += COMPANY_BATCH) {
+        const batch = companiesForMatching.slice(i, i + COMPANY_BATCH)
+        try {
+          const results = await matchCompaniesBatch(profile, batch)
+          for (const match of results) {
+            let score = match.match_score
+            const companyInfo = topCompanies.find(tc => tc.company.id === match.company_id)
+            const hasJobs = (companyInfo?.jobCount || 0) > 0
+
+            // Boost for companies with open jobs
+            if (hasJobs) score = Math.min(100, score + 15)
+
+            const tier = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'stretch'
+
+            if (score >= 40) {
+              await db.from('user_company_matches').upsert({
+                user_id,
+                company_id: match.company_id,
+                match_score: score,
+                match_tier: tier,
+                match_reasoning: match.match_reasoning,
+                skills_matched: match.skills_matched,
+                skills_missing: match.skills_missing,
+                has_open_jobs: hasJobs,
+                open_job_count: companyInfo?.jobCount || 0,
+              }, { onConflict: 'user_id,company_id' })
+              totalCompanyMatches++
+            }
+          }
+        } catch (batchError) {
+          console.error('Company match batch failed:', batchError)
+        }
+      }
+
+      return NextResponse.json({ status: 'completed', company_matches: totalCompanyMatches })
     }
 
     // === PARSE ONLY MODE ===

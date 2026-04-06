@@ -33,7 +33,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'overview' | 'retention' | 'matches' | 'subscribers'>('overview')
+  const [tab, setTab] = useState<'overview' | 'retention' | 'matches' | 'subscribers' | 'suggestions'>('overview')
 
   const login = async () => {
     setLoading(true); setError('')
@@ -88,12 +88,12 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-xl font-bold text-primary">Admin Dashboard</h1>
         <div className="flex gap-0.5 border-b border-zinc-200">
-          {(['overview', 'retention', 'matches', 'subscribers'] as const).map(t => (
+          {(['overview', 'retention', 'matches', 'subscribers', 'suggestions'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
               className={`px-4 py-2 text-xs font-semibold border-b-2 -mb-px transition-colors ${
                 tab === t ? 'border-primary text-primary' : 'border-transparent text-tertiary hover:text-secondary'
               }`}>
-              {t === 'overview' ? 'Overview' : t === 'retention' ? 'Retention' : t === 'matches' ? 'Match Quality' : 'Subscribers'}
+              {t === 'overview' ? 'Overview' : t === 'retention' ? 'Retention' : t === 'matches' ? 'Match Quality' : t === 'subscribers' ? 'Subscribers' : 'Suggestions'}
             </button>
           ))}
         </div>
@@ -256,6 +256,8 @@ export default function AdminDashboard() {
       {tab === 'matches' && <MatchQualityPanel password={password} />}
 
       {tab === 'subscribers' && <SubscriberHealthPanel password={password} />}
+
+      {tab === 'suggestions' && <SuggestionsPanel password={password} />}
     </div>
   )
 }
@@ -601,4 +603,139 @@ function Def({ color, term, desc }: { color: string; term: string; desc: string 
 function RetPct({ v }: { v: number }) {
   const bg = v >= 30 ? 'bg-lime/30 text-lime-dark' : v >= 10 ? 'bg-yellow-100 text-yellow-700' : v > 0 ? 'bg-red-50 text-red-500' : 'text-faint'
   return <span className={`px-1.5 py-0.5 rounded text-2xs font-semibold ${bg}`}>{v}%</span>
+}
+
+function SuggestionsPanel({ password }: { password: string }) {
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+
+  const fetchSuggestions = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/suggestions', {
+        headers: { 'x-admin-password': password },
+      })
+      const data = await res.json()
+      setSuggestions(data.suggestions || [])
+    } catch {}
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchSuggestions() }, [password])
+
+  const handleAction = async (id: string, action: 'approved' | 'rejected') => {
+    setActionLoading(id)
+    await fetch('/api/admin/suggestions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': password },
+      body: JSON.stringify({ suggestion_id: id, action }),
+    })
+    setActionLoading(null)
+    fetchSuggestions()
+  }
+
+  if (loading) return <p className="text-center text-tertiary text-sm py-8">Loading...</p>
+
+  const pending = suggestions.filter(s => s.status === 'pending')
+  const resolved = suggestions.filter(s => s.status !== 'pending')
+
+  return (
+    <div className="space-y-6">
+      {/* Pending */}
+      <div className="card p-5">
+        <h2 className="section-label mb-4">Pending Suggestions ({pending.length})</h2>
+        {pending.length === 0 ? (
+          <p className="text-tertiary text-xs text-center py-4">No pending suggestions.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-200">
+                  <th className="text-left py-2 font-mono text-tertiary">Company</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Website</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Reason</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Submitted By</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Date</th>
+                  <th className="text-right py-2 font-mono text-tertiary">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pending.map((s: any) => (
+                  <tr key={s.id} className="border-b border-zinc-50">
+                    <td className="py-2 font-medium text-primary">{s.company_name}</td>
+                    <td className="py-2">
+                      <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[200px] block">
+                        {s.website}
+                      </a>
+                    </td>
+                    <td className="py-2 text-secondary max-w-[200px] truncate">{s.reason || '—'}</td>
+                    <td className="py-2 font-mono text-tertiary">{s.user_id?.slice(0, 8)}...</td>
+                    <td className="py-2 font-mono text-tertiary">{new Date(s.created_at).toLocaleDateString()}</td>
+                    <td className="py-2 text-right">
+                      <div className="flex gap-1 justify-end">
+                        <button
+                          onClick={() => handleAction(s.id, 'approved')}
+                          disabled={actionLoading === s.id}
+                          className="px-2 py-1 text-2xs rounded border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleAction(s.id, 'rejected')}
+                          disabled={actionLoading === s.id}
+                          className="px-2 py-1 text-2xs rounded border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Resolved */}
+      {resolved.length > 0 && (
+        <div className="card p-5">
+          <h2 className="section-label mb-4">Resolved ({resolved.length})</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-zinc-200">
+                  <th className="text-left py-2 font-mono text-tertiary">Company</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Website</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Status</th>
+                  <th className="text-left py-2 font-mono text-tertiary">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resolved.map((s: any) => (
+                  <tr key={s.id} className="border-b border-zinc-50">
+                    <td className="py-2 font-medium text-primary">{s.company_name}</td>
+                    <td className="py-2">
+                      <a href={s.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        {s.website}
+                      </a>
+                    </td>
+                    <td className="py-2">
+                      <span className={`px-2 py-0.5 rounded text-2xs font-bold ${
+                        s.status === 'approved' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="py-2 font-mono text-tertiary">{new Date(s.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

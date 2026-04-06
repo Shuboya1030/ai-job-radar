@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const { user, loading: authLoading, subscriptionStatus, signInWithGoogle } = useAuth()
   const [status, setStatus] = useState<any>(null)
   const [matches, setMatches] = useState<any[]>([])
+  const [companyMatches, setCompanyMatches] = useState<any[]>([])
   const [skillsGap, setSkillsGap] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [marketComparison, setMarketComparison] = useState<any>(null)
@@ -38,15 +39,18 @@ export default function DashboardPage() {
   }, [])
 
   const fetchResults = useCallback(async () => {
-    const [matchRes, gapRes, profileRes] = await Promise.all([
+    const [matchRes, gapRes, profileRes, companyMatchRes] = await Promise.all([
       fetch('/api/resume/matches'),
       fetch('/api/resume/skills-gap'),
       fetch('/api/resume/profile'),
+      fetch('/api/resume/company-matches'),
     ])
     const matchData = await matchRes.json()
     const gapData = await gapRes.json()
     const profileData = await profileRes.json()
+    const companyMatchData = await companyMatchRes.json()
     setMatches(matchData.matches || [])
+    setCompanyMatches(companyMatchData.matches || [])
     setSkillsGap(gapData)
     setProfile(profileData.parsed_profile || null)
   }, [])
@@ -292,9 +296,25 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {isComplete && matches.length === 0 && (
+                {isComplete && matches.length === 0 && companyMatches.length === 0 && (
                   <div className="card p-6 text-center text-tertiary text-sm">
                     No matches found. Try uploading a different resume.
+                  </div>
+                )}
+
+                {/* Company Matches */}
+                {companyMatches.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Briefcase className="w-4 h-4 text-zinc-500" />
+                      <h2 className="text-sm font-bold text-primary">Matching Companies</h2>
+                      <span className="text-2xs font-mono text-tertiary">({companyMatches.length})</span>
+                    </div>
+                    <div className="space-y-2">
+                      {companyMatches.slice(0, 10).map((m: any) => (
+                        <CompanyMatchCard key={m.id} match={m} />
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
@@ -610,6 +630,57 @@ function MatchCard({ match, onTrackClick }: { match: any; onTrackClick: (id: str
       </div>
     </div>
   )
+}
+
+function CompanyMatchCard({ match: m }: { match: any }) {
+  const co = m.companies
+
+  const funding = co?.funding_amount_cents && co?.funding_amount_status === 'known'
+    ? formatFunding(co.funding_amount_cents) : null
+
+  return (
+    <Link href={`/companies/${co?.id}`} className="card card-hover p-4 flex items-start justify-between gap-3 group">
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-primary group-hover:text-zinc-600 transition-colors truncate mb-1">
+          {co?.name || 'Unknown'}
+        </div>
+        <div className="flex items-center gap-2 text-2xs text-tertiary mb-2">
+          {co?.funding_stage && co.funding_stage !== 'Unknown' && (
+            <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600 font-mono">{co.funding_stage}{funding ? ` · $${funding}` : ''}</span>
+          )}
+          {co?.industry && co.industry !== 'Other' && <span>{co.industry}</span>}
+          {co?.employee_range && <span>{co.employee_range}</span>}
+        </div>
+        {co?.product_description && (
+          <p className="text-2xs text-secondary line-clamp-2 mb-2">{co.product_description}</p>
+        )}
+        <p className="text-2xs text-tertiary">{m.match_reasoning}</p>
+        <div className="flex flex-wrap gap-1 mt-2">
+          {(m.skills_matched as string[])?.slice(0, 5).map((s: string) => (
+            <span key={s} className="text-2xs px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">{s}</span>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-2 flex-shrink-0">
+        <MatchBadge tier={m.match_tier} score={m.match_score} />
+        {m.has_open_jobs ? (
+          <span className="text-2xs font-semibold text-emerald-700 flex items-center gap-1">
+            <Briefcase className="w-3 h-3" /> {m.open_job_count} open
+          </span>
+        ) : (
+          <span className="text-2xs text-tertiary">Reach out directly</span>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+function formatFunding(cents: number): string {
+  const dollars = cents / 100
+  if (dollars >= 1_000_000_000) return `${(dollars / 1_000_000_000).toFixed(1)}B`
+  if (dollars >= 1_000_000) return `${Math.round(dollars / 1_000_000)}M`
+  if (dollars >= 1_000) return `${Math.round(dollars / 1_000)}K`
+  return `${dollars}`
 }
 
 function SkillsGapPanel({ data }: { data: any }) {

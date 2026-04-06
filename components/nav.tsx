@@ -8,9 +8,10 @@ import clsx from 'clsx'
 
 const links = [
   { href: '/', label: 'Overview' },
-  { href: '/market/ai-engineer', label: 'Skills' },
+  { href: '/companies', label: 'Companies' },
   { href: '/jobs', label: 'Jobs' },
-  { href: '/compare', label: 'Compare' },
+  { href: '/news', label: 'News' },
+  { href: '/market/ai-engineer', label: 'Skills' },
 ]
 
 export default function Nav() {

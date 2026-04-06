@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Now run company matching inline (same request)
+      // Company matching — rule-based scoring (no OpenAI calls, instant)
       let totalCompanyMatches = 0
       try {
         await db.from('user_company_matches').delete().eq('user_id', user_id)
@@ -133,13 +133,12 @@ export async function POST(req: NextRequest) {
           .eq('is_active', true)
 
         if (allCompanies?.length) {
-          // Get job skills per company
           const { data: allJobsForCo } = await db
             .from('jobs')
             .select('company_id, hard_skills, tools')
             .eq('is_active', true)
 
-          const coSkills: Record<string, Set<string>> = {}
+          const coSkills: Record<string, string[]> = {}
           const coJobCount: Record<string, number> = {}
           const pSkills = (v: any): string[] => {
             if (!v) return []
@@ -148,52 +147,57 @@ export async function POST(req: NextRequest) {
           }
           for (const j of (allJobsForCo || []) as any[]) {
             coJobCount[j.company_id] = (coJobCount[j.company_id] || 0) + 1
-            if (!coSkills[j.company_id]) coSkills[j.company_id] = new Set()
-            for (const s of pSkills(j.hard_skills)) coSkills[j.company_id].add(s)
-            for (const s of pSkills(j.tools)) coSkills[j.company_id].add(s)
+            if (!coSkills[j.company_id]) coSkills[j.company_id] = []
+            for (const s of pSkills(j.hard_skills)) { if (!coSkills[j.company_id].includes(s)) coSkills[j.company_id].push(s) }
+            for (const s of pSkills(j.tools)) { if (!coSkills[j.company_id].includes(s)) coSkills[j.company_id].push(s) }
           }
 
-          // Pre-filter top 50 companies
           const userInd = (profile.industries || []).map((s: string) => s.toLowerCase())
-          const scored = allCompanies.map(c => {
-            let ps = 0
-            const sk = coSkills[c.id] ? [...coSkills[c.id]] : []
-            if (c.industry && userInd.some((ui: string) => c.industry!.toLowerCase().includes(ui))) ps += 10
-            for (const us of userSkills) {
-              if (sk.some(cs => cs.toLowerCase().includes(us) || us.includes(cs.toLowerCase()))) ps++
+          const userTitleStr = (profile.job_titles || []).join(' ').toLowerCase()
+
+          for (const c of allCompanies) {
+            const skills = coSkills[c.id] || []
+            const skillsLower = skills.map(s => s.toLowerCase())
+            const jc = coJobCount[c.id] || 0
+
+            // Score: industry (0-30) + skills (0-50) + has jobs (0-15) + has desc (0-5)
+            let score = 0
+            let matched: string[] = []
+            let missing: string[] = []
+
+            // Industry match: +30
+            if (c.industry && userInd.some((ui: string) => c.industry!.toLowerCase().includes(ui) || ui.includes(c.industry!.toLowerCase()))) {
+              score += 30
             }
-            if (c.product_description && c.product_description.length > 20) ps += 3
-            return { co: c, ps, sk, jc: coJobCount[c.id] || 0 }
-          })
-          scored.sort((a, b) => b.ps - a.ps)
-          const top50 = scored.slice(0, 20)  // Top 20 companies (keeps within Vercel timeout)
 
-          const coForMatch: CompanyForMatching[] = top50.map(({ co: c, sk, jc }) => ({
-            id: c.id, name: c.name, industry: c.industry,
-            product_description: c.product_description, funding_stage: c.funding_stage,
-            employee_range: c.employee_range, aggregated_skills: sk, open_job_count: jc,
-          }))
+            // Skill overlap: up to 50
+            for (const us of userSkills) {
+              const found = skillsLower.find(cs => cs.includes(us) || us.includes(cs))
+              if (found) { score += 5; matched.push(skills[skillsLower.indexOf(found)] || us) }
+            }
+            score = Math.min(score, 80) // Cap skills contribution
 
-          for (let i = 0; i < coForMatch.length; i += 10) {
-            const batch = coForMatch.slice(i, i + 10)
-            try {
-              const results = await matchCompaniesBatch(profile, batch)
-              for (const m of results) {
-                let score = m.match_score
-                const ci = top50.find(t => t.co.id === m.company_id)
-                if ((ci?.jc || 0) > 0) score = Math.min(100, score + 15)
-                const tier = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'stretch'
-                if (score >= 40) {
-                  await db.from('user_company_matches').upsert({
-                    user_id, company_id: m.company_id, match_score: score, match_tier: tier,
-                    match_reasoning: m.match_reasoning, skills_matched: m.skills_matched,
-                    skills_missing: m.skills_missing, has_open_jobs: (ci?.jc || 0) > 0,
-                    open_job_count: ci?.jc || 0,
-                  }, { onConflict: 'user_id,company_id' })
-                  totalCompanyMatches++
-                }
-              }
-            } catch (e) { console.error('Company match batch failed:', e) }
+            // Has open jobs: +15
+            if (jc > 0) score += 15
+
+            // Has product description: +5
+            if (c.product_description && c.product_description.length > 20) score += 5
+
+            // Cap at 100
+            score = Math.min(100, score)
+
+            if (score >= 40) {
+              const tier = score >= 80 ? 'strong' : score >= 60 ? 'good' : 'stretch'
+              const reasoning = `${c.industry || 'Tech'} company${jc > 0 ? ' with ' + jc + ' open positions' : ''}. ${matched.length > 0 ? 'Matching skills: ' + matched.slice(0, 5).join(', ') + '.' : ''}`
+
+              await db.from('user_company_matches').upsert({
+                user_id, company_id: c.id, match_score: score, match_tier: tier,
+                match_reasoning: reasoning, skills_matched: matched.slice(0, 10),
+                skills_missing: missing.slice(0, 10), has_open_jobs: jc > 0,
+                open_job_count: jc,
+              }, { onConflict: 'user_id,company_id' })
+              totalCompanyMatches++
+            }
           }
         }
       } catch (e) { console.error('Company matching failed (non-fatal):', e) }

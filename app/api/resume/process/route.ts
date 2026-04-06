@@ -166,7 +166,7 @@ export async function POST(req: NextRequest) {
             return { co: c, ps, sk, jc: coJobCount[c.id] || 0 }
           })
           scored.sort((a, b) => b.ps - a.ps)
-          const top50 = scored.slice(0, 50)
+          const top50 = scored.slice(0, 20)  // Top 20 companies (keeps within Vercel timeout)
 
           const coForMatch: CompanyForMatching[] = top50.map(({ co: c, sk, jc }) => ({
             id: c.id, name: c.name, industry: c.industry,
@@ -276,7 +276,7 @@ export async function POST(req: NextRequest) {
       })
 
       scoredCompanies.sort((a, b) => b.preScore - a.preScore)
-      const topCompanies = scoredCompanies.slice(0, 100) // Top 100 for AI matching
+      const topCompanies = scoredCompanies.slice(0, 20) // Top 20 (keeps within Vercel timeout)
 
       const companiesForMatching: CompanyForMatching[] = topCompanies.map(({ company: c, skills, jobCount }) => ({
         id: c.id,

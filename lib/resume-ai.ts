@@ -206,7 +206,7 @@ export async function matchCompaniesBatch(
   ).join('\n')
 
   const response = await openai.chat.completions.create({
-    model: MODEL,
+    model: 'gpt-4o-mini',  // Faster + cheaper for company matching
     max_tokens: 4000,
     response_format: { type: 'json_object' },
     messages: [
